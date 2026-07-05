@@ -1,6 +1,16 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
+import HomePage from "./pages/HomePage";
+import MemoriesPage from "./pages/MemoriesPage";
+import TimelinePage from "./pages/TimelinePage";
+import AlbumsPage from "./pages/AlbumsPage";
+import FavoritesPage from "./pages/FavoritesPage";
+import ArchivePage from "./pages/ArchivePage";
+import AISearchPage from "./pages/AISearchPage";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
+import NotificationPage from "./pages/NotificationPage";
 
 function App() {
   return (
@@ -8,7 +18,16 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard" element={<Dashboard />}>
-          <Route index element={<DashboardHomePlaceholder />} />
+          <Route index element={<HomePage />} />
+          <Route path="memories" element={<MemoriesPage />} />
+          <Route path="timeline" element={<TimelinePage />} />
+          <Route path="albums" element={<AlbumsPage />} />
+          <Route path="favorites" element={<FavoritesPage />} />
+          <Route path="archive" element={<ArchivePage />} />
+          <Route path="ai-search" element={<AISearchPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="notifications" element={<NotificationPage />} />
           <Route path=":section" element={<DashboardHomePlaceholder />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
