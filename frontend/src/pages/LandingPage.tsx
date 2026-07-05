@@ -1,4 +1,4 @@
-  import { useEffect } from "react";
+import { useEffect, useState } from "react";
   import Lenis from "lenis";
   import {
     motion,
@@ -8,7 +8,9 @@
     type MotionValue,
     type Variants,
   } from "framer-motion";
-  import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
+import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
+import LoginPage from "./LoginPage";
+import SignupPage from "./SignupPage";
 
   const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -256,6 +258,8 @@ function FeatureIcon({ name }: { name: string }) {
 }
 
 export default function LandingPage() {
+    const [showLogin, setShowLogin] = useState(false);
+    const [showSignup, setShowSignup] = useState(false);
     const prefersReducedMotion = useReducedMotion();
     const { scrollYProgress } = useScroll();
     const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -70]);
@@ -287,6 +291,21 @@ export default function LandingPage() {
       };
     }, [prefersReducedMotion]);
 
+    const openLoginModal = () => {
+        setShowSignup(false);
+        setShowLogin(true);
+    };
+
+    const openSignupModal = () => {
+        setShowLogin(false);
+        setShowSignup(true);
+    };
+
+    const closeAuthModals = () => {
+        setShowLogin(false);
+        setShowSignup(false);
+    };
+
     return (
       <main className="relative isolate min-h-screen overflow-x-hidden bg-white text-slate-950">
         <motion.div
@@ -307,7 +326,7 @@ export default function LandingPage() {
         </motion.div>
 
         {/* Navbar */}
-        <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
+        <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
           <nav
             aria-label="Primary navigation"
             className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-8"
@@ -340,17 +359,27 @@ export default function LandingPage() {
               </a>
             </div>
 
-            <a
-              href="#cta"
-              className="rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition duration-300 hover:-translate-y-1 hover:opacity-70 hover:shadow-lg hover:shadow-indigo-600/25"
-            >
-              Start Preserving
-            </a>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={openLoginModal}
+                className="rounded-full px-4 py-2.5 text-sm font-semibold text-slate-600 transition duration-300 hover:-translate-y-0.5 hover:text-slate-950"
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={openSignupModal}
+                className="rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition duration-300 hover:-translate-y-1 hover:opacity-90 hover:shadow-lg hover:shadow-indigo-600/25"
+              >
+                Sign Up
+              </button>
+            </div>
           </nav>
         </header>
 
         {/* Hero */}
-        <section className="relative z-10 mx-auto grid max-w-7xl items-center gap-16 px-6 pb-28 pt-20 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:pb-36 lg:pt-28">
+        <section className="relative z-10 mx-auto grid max-w-7xl items-center gap-16 px-6 pb-28 pt-32 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:pb-36 lg:pt-40">
           <motion.div
             className="max-w-3xl"
             initial="hidden"
@@ -388,12 +417,13 @@ export default function LandingPage() {
               variants={fadeUp}
               className="mt-10 flex flex-col gap-3 sm:flex-row"
             >
-              <a
-                href="#cta"
+              <button
+                type="button"
+                onClick={openSignupModal}
                 className="rounded-full bg-slate-950 px-7 py-3.5 text-center text-sm font-semibold text-white shadow-xl shadow-slate-950/10 transition duration-300 hover:-translate-y-1 hover:bg-gray-700 hover:shadow-2xl hover:shadow-slate-950/15"
               >
-                Start Preserving
-              </a>
+                Sign Up Free
+              </button>
               <a
                 href="#features"
                 className="rounded-full border border-slate-200 bg-white px-7 py-3.5 text-center text-sm font-semibold text-slate-800 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:opacity-50 hover:shadow-lg hover:shadow-slate-950/5"
@@ -512,7 +542,7 @@ export default function LandingPage() {
                   variants={fadeUp}
                   whileHover={{ y: -8, scale: 1.025 }}
                   transition={{ duration: 0.35 }}
-                  className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm"
+                  className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm hover:shadow-2xl hover:bg-white/60"
                 >
                   <img
                     src={card.image}
@@ -566,7 +596,7 @@ export default function LandingPage() {
                 variants={fadeUp}
                 whileHover={{ y: -8, scale: 1.025 }}
                 transition={{ duration: 0.35 }}
-                className="rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:shadow-slate-950/10"
+                className="rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:bg-white/60"
               >
                 <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
                   <FeatureIcon name={feature.icon} />
@@ -626,7 +656,7 @@ export default function LandingPage() {
                     key={example}
                     variants={fadeUp}
                     whileHover={{ y: -6, scale: 1.02 }}
-                    className="rounded-2xl border border-white/10 bg-white/[0.07] p-3"
+                    className="rounded-2xl border border-white/10 bg-white/[0.07] p-3 hover:bg-white/15"
                   >
                     <div className="h-24 overflow-hidden rounded-xl">
                       <img
@@ -677,7 +707,7 @@ export default function LandingPage() {
                   variants={fadeUp}
                   whileHover={{ x: 8, scale: 1.01 }}
                   transition={{ duration: 0.35 }}
-                  className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm"
+                  className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
                 >
                   <div className="flex gap-5">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-sm font-semibold text-indigo-700">
@@ -726,10 +756,21 @@ export default function LandingPage() {
 
         {/* Footer */}
         <footer className="relative z-10 border-t border-slate-100 bg-white/70 px-6 py-10 backdrop-blur-sm">
-          <div className="mx-auto max-w-7xl text-sm text-slate-500">
+          <div className="mx-auto max-w-7xl text-sm text-black-500">
             © 2026 I-Nelory. Your Personal Digital Memory.
           </div>
         </footer>
+
+        <LoginPage
+          isOpen={showLogin}
+          onClose={closeAuthModals}
+          onSwitchToSignup={openSignupModal}
+        />
+        <SignupPage
+          isOpen={showSignup}
+          onClose={closeAuthModals}
+          onSwitchToLogin={openLoginModal}
+        />
       </main>
     );
   }
