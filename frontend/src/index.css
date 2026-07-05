@@ -9,7 +9,7 @@ body {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.16);
+  background: rgba(16, 185, 129, 0.16);
 }
 
 @keyframes fade-in-up {
@@ -174,7 +174,7 @@ body {
 
 .bg-orb-one {
   animation: float 18s ease-in-out infinite;
-  background: #818cf8;
+  background: #34d399;
 }
 
 .bg-orb-two {
@@ -190,7 +190,7 @@ body {
 .bg-memory-frame {
   --frame-rotate: -7deg;
   animation: photoFloat 28s ease-in-out infinite;
-  border: 1px solid rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.12);
   border-radius: 28px;
   box-shadow: inset 0 0 0 10px rgba(248, 250, 252, 0.72);
   opacity: 0.36;
@@ -209,7 +209,7 @@ body {
 }
 
 .bg-memory-frame::after {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(16, 185, 129, 0.1);
   border-radius: 9999px;
   content: "";
   height: 18px;
@@ -231,12 +231,12 @@ body {
   --frame-rotate: -3deg;
   animation-delay: -14s;
   animation-duration: 36s;
-  border-color: rgba(99, 102, 241, 0.1);
+  border-color: rgba(16, 185, 129, 0.1);
   opacity: 0.22;
 }
 
-.ambient-blob--indigo {
-  background: #818cf8;
+.ambient-blob--emerald {
+  background: #34d399;
 }
 
 .ambient-blob--slate {
@@ -308,7 +308,7 @@ body {
 .photo-surface {
   background:
     radial-gradient(circle at 24% 24%, rgba(255, 255, 255, 0.78), transparent 18%),
-    linear-gradient(135deg, rgba(199, 210, 254, 0.92), rgba(241, 245, 249, 0.88));
+    linear-gradient(135deg, rgba(167, 243, 208, 0.92), rgba(241, 245, 249, 0.88));
   overflow: hidden;
   position: relative;
 }

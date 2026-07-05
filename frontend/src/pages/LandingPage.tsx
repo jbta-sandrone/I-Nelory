@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
   import Lenis from "lenis";
-  import {
-    motion,
-    useReducedMotion,
-    useScroll,
-    useTransform,
-    type MotionValue,
-    type Variants,
-  } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  type MotionValue,
+  type Variants,
+} from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
@@ -103,7 +105,7 @@ import SignupPage from "./SignupPage";
     "Show birthday celebrations.",
   ];
 
-  const timelineItems = [
+const timelineItems = [
     {
       year: "2026",
       title: "A summer album begins",
@@ -119,7 +121,25 @@ import SignupPage from "./SignupPage";
       title: "First archive imported",
       detail: "Old images and notes find a cleaner long-term home.",
     },
-  ];
+];
+
+const loadingMessages = [
+  "Transporting you to your digital world...",
+  "Taking you home...",
+  "Opening your memory space...",
+  "Opening your private archive...",
+  "Gathering your favorite moments...",
+  "Restoring your memory space...",
+  "Hopping in...",
+];
+
+const loadingMemoryElements = [
+  { icon: "▧", x: "-132%", y: "-70%", rotate: -12, duration: 3.8, delay: 0 },
+  { icon: "◫", x: "66%", y: "-82%", rotate: 10, duration: 4.2, delay: 0.2 },
+  { icon: "✦", x: "-92%", y: "42%", rotate: 8, duration: 3.6, delay: 0.4 },
+  { icon: "◉", x: "112%", y: "28%", rotate: -8, duration: 4.4, delay: 0.1 },
+  { icon: "□", x: "-12%", y: "-110%", rotate: 4, duration: 4, delay: 0.3 },
+];
 
   type ScrollBackgroundImageProps = {
     image: string;
@@ -257,9 +277,162 @@ function FeatureIcon({ name }: { name: string }) {
   );
 }
 
+function LoadingTransition() {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [dotCount, setDotCount] = useState(1);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setMessageIndex((current) => (current + 1) % loadingMessages.length);
+    }, 2800);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setDotCount((current) => (current % 3) + 1);
+    }, 500);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-white px-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.14),transparent_34%),radial-gradient(circle_at_30%_70%,rgba(15,23,42,0.06),transparent_24%)]" />
+      <div className="absolute left-1/4 top-1/4 h-64 w-64 rounded-full bg-emerald-100/50 blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 h-72 w-72 rounded-full bg-slate-100/80 blur-3xl" />
+
+      <div className="relative w-full max-w-md text-center">
+        <div className="relative mx-auto h-40 w-56">
+          {loadingMemoryElements.map((element) => (
+            <motion.div
+              key={`${element.icon}-${element.x}`}
+              className="absolute left-1/2 top-1/2 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 text-lg text-emerald-600 shadow-xl shadow-slate-950/10 backdrop-blur-sm"
+              initial={{
+                opacity: 0,
+                x: "-50%",
+                y: "-50%",
+                rotate: element.rotate,
+                scale: 0.9,
+              }}
+              animate={{
+                opacity: [0, 0.78, 0.56, 0.78],
+                x: [element.x, `calc(${element.x} + 10px)`, element.x],
+                y: [element.y, `calc(${element.y} - 12px)`, element.y],
+                rotate: [element.rotate, element.rotate + 3, element.rotate],
+                scale: [0.96, 1.04, 0.98],
+              }}
+              transition={{
+                duration: element.duration,
+                delay: element.delay,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              <span aria-hidden="true">{element.icon}</span>
+            </motion.div>
+          ))}
+
+          {[0, 1, 2].map((card) => (
+            <motion.div
+              key={card}
+              className="absolute left-1/2 top-1/2 h-28 w-24 rounded-[1.25rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/10"
+              initial={{
+                opacity: 0,
+                x: "-50%",
+                y: "-50%",
+                rotate: card === 0 ? -10 : card === 1 ? 0 : 10,
+                scale: 0.94,
+              }}
+              animate={{
+                opacity: [0.82, 1, 0.86],
+                x:
+                  card === 0
+                    ? ["-92%", "-96%", "-92%"]
+                    : card === 1
+                    ? ["-50%", "-48%", "-50%"]
+                    : ["-8%", "-4%", "-8%"],
+                y:
+                  card === 1
+                    ? ["-58%", "-64%", "-58%"]
+                    : ["-42%", "-48%", "-42%"],
+                rotate:
+                  card === 0
+                    ? [-10, -7, -10]
+                    : card === 1
+                    ? [0, 2, 0]
+                    : [10, 7, 10],
+                scale: [0.98, 1.03, 0.99],
+              }}
+              transition={{
+                duration: 2.8 + card * 0.35,
+                delay: card * 0.12,
+                repeat: Infinity,
+                ease: easeOut,
+              }}
+            >
+              <div className="m-3 h-16 rounded-2xl bg-emerald-50" />
+              <div className="mx-3 h-2 rounded-full bg-slate-100" />
+              <div className="mx-3 mt-2 h-2 w-2/3 rounded-full bg-slate-100" />
+            </motion.div>
+          ))}
+        </div>
+
+        <motion.p
+          className="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600"
+          animate={{ opacity: [0.55, 1, 0.55] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+        >
+          I-Nelory
+        </motion.p>
+
+        <div className="mt-4 min-h-16">
+          <AnimatePresence mode="wait">
+            <motion.p
+              className="text-2xl font-semibold tracking-tight text-slate-950"
+              key={loadingMessages[messageIndex]}
+              initial={{ opacity: 0, y: 12, filter: "blur(4px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -12, filter: "blur(4px)" }}
+              transition={{ duration: 0.35, ease: easeOut }}
+            >
+              {loadingMessages[messageIndex].replace(/\.+$/, "")}
+              {".".repeat(dotCount)}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+
+        <div className="relative mx-auto mt-8 h-2 max-w-xs overflow-hidden rounded-full bg-slate-100 shadow-inner">
+          <motion.div
+            className="relative h-full rounded-full bg-emerald-600 shadow-[0_0_24px_rgba(16,185,129,0.45)]"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 7, ease: "easeInOut" }}
+          >
+            <motion.div
+              className="absolute inset-y-0 w-16 bg-white/35 blur-sm"
+              animate={{ x: ["-100%", "260%"] }}
+              transition={{ duration: 1.25, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function LandingPage() {
     const [showLogin, setShowLogin] = useState(false);
     const [showSignup, setShowSignup] = useState(false);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const navigate = useNavigate();
     const prefersReducedMotion = useReducedMotion();
     const { scrollYProgress } = useScroll();
     const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -70]);
@@ -306,6 +479,15 @@ export default function LandingPage() {
         setShowSignup(false);
     };
 
+    const handleLoginSuccess = () => {
+        closeAuthModals();
+        setIsLoggingIn(true);
+
+        window.setTimeout(() => {
+            navigate("/dashboard");
+        }, 8000);
+    };
+
     return (
       <main className="relative isolate min-h-screen overflow-x-hidden bg-white text-slate-950">
         <motion.div
@@ -326,7 +508,7 @@ export default function LandingPage() {
         </motion.div>
 
         {/* Navbar */}
-        <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
+        <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/70 backdrop-blur-xl">
           <nav
             aria-label="Primary navigation"
             className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-8"
@@ -370,7 +552,7 @@ export default function LandingPage() {
               <button
                 type="button"
                 onClick={openSignupModal}
-                className="rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition duration-300 hover:-translate-y-1 hover:opacity-90 hover:shadow-lg hover:shadow-indigo-600/25"
+                className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-emerald-600/20 transition duration-300 hover:-translate-y-1 hover:opacity-90 hover:shadow-lg hover:shadow-emerald-600/25"
               >
                 Sign Up
               </button>
@@ -392,7 +574,7 @@ export default function LandingPage() {
           >
             <motion.span
               variants={fadeUp}
-              className="inline-flex rounded-full border border-indigo-100 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700"
+              className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
             >
               Your Personal Digital Memory.
             </motion.span>
@@ -420,13 +602,13 @@ export default function LandingPage() {
               <button
                 type="button"
                 onClick={openSignupModal}
-                className="rounded-full bg-slate-950 px-7 py-3.5 text-center text-sm font-semibold text-white shadow-xl shadow-slate-950/10 transition duration-300 hover:-translate-y-1 hover:bg-gray-700 hover:shadow-2xl hover:shadow-slate-950/15"
+                className="rounded-full bg-emerald-700 px-7 py-3.5 text-center text-sm font-semibold text-white shadow-xl shadow-slate-950/10 transition duration-300 hover:-translate-y-1 hover:bg-emerald-800 hover:shadow-2xl hover:shadow-slate-950/15"
               >
                 Sign Up Free
               </button>
               <a
                 href="#features"
-                className="rounded-full border border-slate-200 bg-white px-7 py-3.5 text-center text-sm font-semibold text-slate-800 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:opacity-50 hover:shadow-lg hover:shadow-slate-950/5"
+                className="rounded-full border border-slate-200 bg-white px-7 py-3.5 text-center text-sm font-semibold text-slate-800 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:opacity-50 hover:shadow-lg hover:bg-white/80"
               >
                 Explore Features
               </a>
@@ -481,7 +663,7 @@ export default function LandingPage() {
                     Private archive overview
                   </p>
                 </div>
-                <div className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                   248 saved
                 </div>
               </div>
@@ -515,7 +697,7 @@ export default function LandingPage() {
         >
           <div className="mx-auto grid max-w-7xl gap-12 px-6 py-24 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:px-8">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
                 Memory Journey
               </p>
               <h2 className="mt-5 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
@@ -575,7 +757,7 @@ export default function LandingPage() {
             variants={fadeUp}
             className="max-w-2xl"
           >
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
               Features
             </p>
             <h2 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
@@ -598,7 +780,7 @@ export default function LandingPage() {
                 transition={{ duration: 0.35 }}
                 className="rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:bg-white/60"
               >
-                <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
                   <FeatureIcon name={feature.icon} />
                 </div>
                 <h3 className="text-xl font-semibold text-slate-950">
@@ -621,12 +803,12 @@ export default function LandingPage() {
           viewport={{ once: true, amount: 0.25 }}
           variants={fadeUp}
         >
-          <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl" />
+          <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-emerald-500/15 blur-3xl" />
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:48px_48px] opacity-30 [mask-image:radial-gradient(circle_at_center,black,transparent_72%)]" />
 
           <div className="relative mx-auto grid max-w-7xl gap-12 px-6 py-24 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:px-8">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-300">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
                 AI Memory Search
               </p>
               <h2 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
@@ -688,7 +870,7 @@ export default function LandingPage() {
             variants={staggerContainer}
           >
             <motion.div variants={fadeUp}>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
                 Timeline Preview
               </p>
               <h2 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
@@ -710,7 +892,7 @@ export default function LandingPage() {
                   className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
                 >
                   <div className="flex gap-5">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-sm font-semibold text-indigo-700">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-semibold text-emerald-700">
                       {item.year}
                     </div>
                     <div>
@@ -747,7 +929,7 @@ export default function LandingPage() {
             </p>
             <a
               href="#"
-              className="mt-10 inline-flex rounded-full bg-indigo-600 px-8 py-4 text-sm font-semibold text-white shadow-xl shadow-indigo-600/20 transition duration-300 hover:-translate-y-1 hover:bg-indigo-700 hover:shadow-2xl hover:shadow-indigo-600/30"
+              className="mt-10 inline-flex rounded-full bg-emerald-600 px-8 py-4 text-sm font-semibold text-white shadow-xl shadow-emerald-600/20 transition duration-300 hover:-translate-y-1 hover:bg-emerald-700 hover:shadow-2xl hover:shadow-emerald-600/30"
             >
               Start Preserving
             </a>
@@ -764,6 +946,7 @@ export default function LandingPage() {
         <LoginPage
           isOpen={showLogin}
           onClose={closeAuthModals}
+          onLoginSuccess={handleLoginSuccess}
           onSwitchToSignup={openSignupModal}
         />
         <SignupPage
@@ -771,6 +954,7 @@ export default function LandingPage() {
           onClose={closeAuthModals}
           onSwitchToLogin={openLoginModal}
         />
+        <AnimatePresence>{isLoggingIn ? <LoadingTransition /> : null}</AnimatePresence>
       </main>
     );
   }

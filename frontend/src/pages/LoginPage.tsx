@@ -4,12 +4,14 @@ import type { MouseEvent } from "react";
 type LoginPageProps = {
   isOpen: boolean;
   onClose: () => void;
+  onLoginSuccess: () => void;
   onSwitchToSignup: () => void;
 };
 
 export default function LoginPage({
   isOpen,
   onClose,
+  onLoginSuccess,
   onSwitchToSignup,
 }: LoginPageProps) {
   return (
@@ -38,7 +40,7 @@ export default function LoginPage({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-indigo-600">
+                <p className="text-sm font-semibold text-emerald-600">
                   Welcome back
                 </p>
                 <h2
@@ -64,7 +66,10 @@ export default function LoginPage({
 
             <form
               className="mt-8 space-y-5"
-              onSubmit={(event) => event.preventDefault()}
+              onSubmit={(event) => {
+                event.preventDefault();
+                onLoginSuccess();
+              }}
             >
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">
@@ -74,7 +79,7 @@ export default function LoginPage({
                   type="email"
                   autoComplete="email"
                   placeholder="you@example.com"
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition duration-300 placeholder:text-slate-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition duration-300 placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/20"
                 />
               </label>
 
@@ -86,13 +91,13 @@ export default function LoginPage({
                   type="password"
                   autoComplete="current-password"
                   placeholder="Enter your password"
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition duration-300 placeholder:text-slate-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition duration-300 placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/20"
                 />
               </label>
 
               <button
                 type="submit"
-                className="w-full rounded-full bg-indigo-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition duration-300 hover:-translate-y-1 hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/25"
+                className="w-full rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-1 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25"
               >
                 Login
               </button>
@@ -103,7 +108,7 @@ export default function LoginPage({
               <button
                 type="button"
                 onClick={onSwitchToSignup}
-                className="font-semibold text-indigo-600 transition hover:text-indigo-700"
+                className="font-semibold text-emerald-600 transition hover:text-emerald-700"
               >
                 Sign up
               </button>
