@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
+import type { AuthUser } from "../services/auth";
 
   const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -428,7 +429,11 @@ function LoadingTransition() {
   );
 }
 
-export default function LandingPage() {
+type LandingPageProps = {
+  onLoginSuccess: (user: AuthUser) => void;
+};
+
+export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
     const [showLogin, setShowLogin] = useState(false);
     const [showSignup, setShowSignup] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -479,7 +484,8 @@ export default function LandingPage() {
         setShowSignup(false);
     };
 
-    const handleLoginSuccess = () => {
+    const handleLoginSuccess = (user: AuthUser) => {
+        onLoginSuccess(user);
         closeAuthModals();
         setIsLoggingIn(true);
 

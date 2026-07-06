@@ -1,0 +1,128 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  MEMORY_CREATED
+  MEMORY_UPDATED
+  MEMORY_DELETED
+  ALBUM_CREATED
+  ALBUM_UPDATED
+  ALBUM_DELETED
+}
+
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  memories  Memory[]
+  albums    Album[]
+  tags      Tag[]
+  notifications Notification[]
+  activities Activity[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Memory {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  mediaUrl    String?
+  mediaType   MediaType?
+  tags        Tag[]
+  memoryDate  DateTime?
+  location    String?
+  isFavorite  Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+
+  albumId String?
+
+  album Album? @relation(fields: [albumId], references: [id], onDelete: SetNull)
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Album {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  coverUrl    String?
+
+  memories Memory[]
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String
+  color     String?
+  memories  Memory[]
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  isRead    Boolean  @default(false)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Activity {
+  id        String   @id @default(uuid())
+  action    String
+  message   String
+  type      ActivityType?
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}

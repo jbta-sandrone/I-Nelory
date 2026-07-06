@@ -14,5 +14,8 @@
     "dev:backend": "npm run dev --workspace backend",
     "build:backend": "npm run build --workspace backend",
     "start:backend": "npm run start --workspace backend"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0"
   }
 }

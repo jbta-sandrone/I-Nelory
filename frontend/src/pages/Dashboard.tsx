@@ -141,6 +141,10 @@ export default function Dashboard() {
     setLogoutOpen(true);
   };
 
+  const openNewMemoryModal = () => {
+    setNewMemoryOpen(true);
+  };
+
   const confirmLogout = () => {
     setIsLoggingOut(true);
     window.setTimeout(() => {
@@ -274,7 +278,7 @@ export default function Dashboard() {
               Menu
             </button>
 
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <input
                 type="search"
                 placeholder="Search memories, albums, places..."
@@ -284,10 +288,19 @@ export default function Dashboard() {
 
             <button
               type="button"
-              onClick={() => setNewMemoryOpen(true)}
+              onClick={openNewMemoryModal}
               className="hidden rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 sm:inline-flex"
             >
               + New Memory
+            </button>
+
+            <button
+              type="button"
+              aria-label="New Memory"
+              onClick={openNewMemoryModal}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xl font-semibold leading-none text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 sm:hidden"
+            >
+              +
             </button>
 
             <div className="relative">

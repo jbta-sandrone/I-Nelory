@@ -1,4 +1,14 @@
+import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { AuthContext } from "./context/AuthContext";
+import {
+  clearAuthSession,
+  getCurrentUser,
+  getStoredAuthToken,
+  getStoredAuthUser,
+  saveAuthUser,
+  type AuthUser,
+} from "./services/auth";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import HomePage from "./pages/HomePage";
@@ -13,26 +23,84 @@ import SettingsPage from "./pages/SettingsPage";
 import NotificationPage from "./pages/NotificationPage";
 
 function App() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() =>
+    getStoredAuthUser()
+  );
+  const [isRestoringUser, setIsRestoringUser] = useState(() =>
+    Boolean(getStoredAuthToken())
+  );
+
+  useEffect(() => {
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      return;
+    }
+
+    let isActive = true;
+
+    getCurrentUser(token)
+      .then(({ user }) => {
+        if (!isActive) {
+          return;
+        }
+
+        setAuthUser(user);
+        saveAuthUser(user);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        clearAuthSession();
+        setAuthUser(null);
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsRestoringUser(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const authContextValue = useMemo(
+    () => ({
+      user: authUser,
+      setUser: setAuthUser,
+      isRestoringUser,
+    }),
+    [authUser, isRestoringUser]
+  );
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/dashboard" element={<Dashboard />}>
-          <Route index element={<HomePage />} />
-          <Route path="memories" element={<MemoriesPage />} />
-          <Route path="timeline" element={<TimelinePage />} />
-          <Route path="albums" element={<AlbumsPage />} />
-          <Route path="favorites" element={<FavoritesPage />} />
-          <Route path="archive" element={<ArchivePage />} />
-          <Route path="ai-search" element={<AISearchPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="notifications" element={<NotificationPage />} />
-          <Route path=":section" element={<DashboardHomePlaceholder />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthContext.Provider value={authContextValue}>
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="/"
+            element={<LandingPage onLoginSuccess={setAuthUser} />}
+          />
+          <Route path="/dashboard" element={<Dashboard />}>
+            <Route index element={<HomePage />} />
+            <Route path="memories" element={<MemoriesPage />} />
+            <Route path="timeline" element={<TimelinePage />} />
+            <Route path="albums" element={<AlbumsPage />} />
+            <Route path="favorites" element={<FavoritesPage />} />
+            <Route path="archive" element={<ArchivePage />} />
+            <Route path="ai-search" element={<AISearchPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="notifications" element={<NotificationPage />} />
+            <Route path=":section" element={<DashboardHomePlaceholder />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthContext.Provider>
   );
 }
 
