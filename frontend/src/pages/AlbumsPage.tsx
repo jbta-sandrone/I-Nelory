@@ -1,16 +1,58 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import type { ReactNode } from "react";
-import { useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
+import FeedbackDialog, {
+  type FeedbackState,
+} from "../components/FeedbackDialog";
+import {
+  startActionTransition,
+  waitForActionTransition,
+} from "../utils/actionTransition";
 
 type Album = {
-  id: number;
+  id: string;
   name: string;
   description: string;
   count: string;
   updated: string;
-  image: string;
+  image: string | null;
   tags: string[];
   thumbnails: string[];
+  memoryCount: number;
+};
+
+type ApiAlbumMemory = {
+  id: string;
+  mediaUrl?: string | null;
+  createdAt: string;
+};
+
+type ApiAlbum = {
+  id: string;
+  name: string;
+  description?: string | null;
+  coverUrl?: string | null;
+  memories?: ApiAlbumMemory[];
+  _count?: {
+    memories?: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+type AlbumsResponse = {
+  message: string;
+  albums: ApiAlbum[];
+};
+
+type CreateAlbumResponse = {
+  message: string;
+  album: ApiAlbum;
+};
+
+type DeleteAlbumResponse = {
+  message?: string;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -40,142 +82,56 @@ const staggerContainer: Variants = {
   },
 };
 
-const albumImages = {
-  family:
-    "https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=900&q=80",
-  travel:
-    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
-  college:
-    "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=80",
-  gym:
-    "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=900&q=80",
-  coding:
-    "https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=900&q=80",
-  friends:
-    "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=900&q=80",
-  pets:
-    "https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=900&q=80",
-  birthdays:
-    "https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=900&q=80",
-  events:
-    "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=900&q=80",
-  journal:
-    "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=900&q=80",
-};
-
-const stats = [
-  { label: "Total Albums", value: "18", icon: "▣" },
-  { label: "Memories in Albums", value: "412", icon: "◇" },
-  { label: "Most Recent Album", value: "Events", icon: "◷" },
-  { label: "Favorite Album", value: "Travel", icon: "♡" },
-];
-
-const featuredAlbum: Album = {
-  id: 0,
-  name: "Summer Escape",
-  description: "A collection of warm sunsets, beaches, and slow weekends.",
-  count: "42 memories",
-  updated: "Updated 2 days ago",
-  image: albumImages.travel,
-  tags: ["Beach", "Sunset", "Travel"],
-  thumbnails: [albumImages.travel, albumImages.friends, albumImages.journal],
-};
-
-const albums: Album[] = [
-  {
-    id: 1,
-    name: "Family",
-    description: "Everyday moments, birthdays, dinners, and home traditions.",
-    count: "64 memories",
-    updated: "Updated today",
-    image: albumImages.family,
-    tags: ["Home", "Love"],
-    thumbnails: [albumImages.family, albumImages.birthdays, albumImages.pets],
-  },
-  {
-    id: 2,
-    name: "Travel",
-    description: "Places visited, views saved, and little discoveries.",
-    count: "58 memories",
-    updated: "Updated yesterday",
-    image: albumImages.travel,
-    tags: ["Trips", "Nature"],
-    thumbnails: [albumImages.travel, albumImages.friends, albumImages.college],
-  },
-  {
-    id: 3,
-    name: "College",
-    description: "Campus days, milestones, friends, and proud endings.",
-    count: "37 memories",
-    updated: "Updated 4 days ago",
-    image: albumImages.college,
-    tags: ["School", "Milestone"],
-    thumbnails: [albumImages.college, albumImages.friends, albumImages.journal],
-  },
-  {
-    id: 4,
-    name: "Gym",
-    description: "Progress photos, routines, small wins, and stronger days.",
-    count: "22 memories",
-    updated: "Updated last week",
-    image: albumImages.gym,
-    tags: ["Fitness", "Growth"],
-    thumbnails: [albumImages.gym, albumImages.journal, albumImages.coding],
-  },
-  {
-    id: 5,
-    name: "Coding",
-    description: "Late-night builds, project notes, and learning snapshots.",
-    count: "31 memories",
-    updated: "Updated May 28",
-    image: albumImages.coding,
-    tags: ["Projects", "Learning"],
-    thumbnails: [albumImages.coding, albumImages.journal, albumImages.college],
-  },
-  {
-    id: 6,
-    name: "Friends",
-    description: "Hangouts, road trips, laughs, and golden-hour photos.",
-    count: "45 memories",
-    updated: "Updated May 20",
-    image: albumImages.friends,
-    tags: ["Weekend", "People"],
-    thumbnails: [albumImages.friends, albumImages.travel, albumImages.birthdays],
-  },
-  {
-    id: 7,
-    name: "Pets",
-    description: "Tiny chaos, soft moments, and the photos nobody deletes.",
-    count: "26 memories",
-    updated: "Updated May 12",
-    image: albumImages.pets,
-    tags: ["Home", "Cute"],
-    thumbnails: [albumImages.pets, albumImages.family, albumImages.journal],
-  },
-  {
-    id: 8,
-    name: "Birthdays",
-    description: "Candles, cakes, wishes, and the people gathered around.",
-    count: "33 memories",
-    updated: "Updated April 30",
-    image: albumImages.birthdays,
-    tags: ["Celebration", "Family"],
-    thumbnails: [albumImages.birthdays, albumImages.family, albumImages.friends],
-  },
-  {
-    id: 9,
-    name: "Events",
-    description: "Special days, gatherings, and moments that only happen once.",
-    count: "29 memories",
-    updated: "Updated April 12",
-    image: albumImages.events,
-    tags: ["Gatherings", "Milestones"],
-    thumbnails: [albumImages.events, albumImages.birthdays, albumImages.friends],
-  },
-];
 
 function inputClasses() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/15";
+}
+
+function getStoredToken() {
+  return localStorage.getItem("i-nelory.auth.token");
+}
+
+function formatCount(count: number) {
+  return `${count} ${count === 1 ? "memory" : "memories"}`;
+}
+
+function formatUpdatedAt(updatedAt: string) {
+  const date = new Date(updatedAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Updated recently";
+  }
+
+  return `Updated ${new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date)}`;
+}
+
+function isPresentString(value: string | undefined): value is string {
+  return Boolean(value);
+}
+
+function mapApiAlbum(album: ApiAlbum): Album {
+  const thumbnails =
+    album.memories
+      ?.map((memory) => memory.mediaUrl?.trim())
+      .filter(isPresentString)
+      .slice(0, 3) ?? [];
+  const memoryCount = album._count?.memories ?? thumbnails.length;
+
+  return {
+    id: album.id,
+    name: album.name,
+    description: album.description?.trim() || "No description yet.",
+    count: formatCount(memoryCount),
+    updated: formatUpdatedAt(album.updatedAt),
+    image: album.coverUrl?.trim() || thumbnails[0] || null,
+    tags: [memoryCount > 0 ? "Has memories" : "Empty album"],
+    thumbnails,
+    memoryCount,
+  };
 }
 
 function FormField({
@@ -194,6 +150,10 @@ function FormField({
 }
 
 function ThumbnailStack({ images }: { images: string[] }) {
+  if (images.length === 0) {
+    return null;
+  }
+
   return (
     <div className="flex -space-x-3">
       {images.map((image) => (
@@ -212,10 +172,12 @@ function AlbumCard({
   album,
   openMenuId,
   onToggleMenu,
+  onDelete,
 }: {
   album: Album;
-  openMenuId: number | null;
-  onToggleMenu: (id: number) => void;
+  openMenuId: string | null;
+  onToggleMenu: (id: string) => void;
+  onDelete: (album: Album) => void;
 }) {
   return (
     <motion.article
@@ -225,11 +187,17 @@ function AlbumCard({
       className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
     >
       <div className="relative h-44 overflow-hidden">
-        <img
-          src={album.image}
-          alt=""
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-        />
+        {album.image ? (
+          <img
+            src={album.image}
+            alt=""
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105">
+            A
+          </div>
+        )}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/45 to-transparent" />
         <div className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/90 text-lg text-emerald-700 shadow-sm backdrop-blur">
           ▣
@@ -257,6 +225,11 @@ function AlbumCard({
                   <button
                     key={action}
                     type="button"
+                    onClick={() => {
+                      if (action === "Delete") {
+                        onDelete(album);
+                      }
+                    }}
                     className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
                   >
                     {action}
@@ -306,7 +279,263 @@ function AlbumCard({
 
 export default function AlbumsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [createErrorMessage, setCreateErrorMessage] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [albumToDelete, setAlbumToDelete] = useState<Album | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
+  const [isActionTransitioning, setIsActionTransitioning] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+
+  const featuredAlbum = albums[0] ?? null;
+  const stats = useMemo(() => {
+    const totalMemories = albums.reduce(
+      (total, album) => total + album.memoryCount,
+      0,
+    );
+    const largestAlbum = albums.reduce<Album | null>(
+      (largest, album) =>
+        !largest || album.memoryCount > largest.memoryCount ? album : largest,
+      null,
+    );
+
+    return [
+      { label: "Total Albums", value: String(albums.length), icon: "A" },
+      {
+        label: "Memories in Albums",
+        value: String(totalMemories),
+        icon: "M",
+      },
+      {
+        label: "Most Recent Album",
+        value: albums[0]?.name ?? "None",
+        icon: "R",
+      },
+      {
+        label: "Largest Album",
+        value: largestAlbum?.name ?? "None",
+        icon: "L",
+      },
+    ];
+  }, [albums]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchAlbums() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      try {
+        const token = getStoredToken();
+
+        if (!token) {
+          throw new Error("Missing authentication token. Please log in again.");
+        }
+
+        const response = await fetch("http://localhost:5000/api/albums", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        const data = (await response.json().catch(() => null)) as
+          | AlbumsResponse
+          | { message?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(data?.message || "Failed to load albums.");
+        }
+
+        setAlbums(
+          data && "albums" in data ? data.albums.map(mapApiAlbum) : [],
+        );
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setAlbums([]);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to load albums.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchAlbums();
+
+    return () => controller.abort();
+  }, []);
+
+  const closeCreateModal = () => {
+    if (!isCreating) {
+      setCreateErrorMessage("");
+      setIsModalOpen(false);
+    }
+  };
+
+  const openDeleteConfirmation = (album: Album) => {
+    setOpenMenuId(null);
+    setDeleteErrorMessage("");
+    setAlbumToDelete(album);
+  };
+
+  const closeDeleteConfirmation = () => {
+    if (!isDeleting) {
+      setDeleteErrorMessage("");
+      setAlbumToDelete(null);
+    }
+  };
+
+  const handleCreateAlbum = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const name = String(formData.get("name") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+
+    setCreateErrorMessage("");
+
+    if (!name) {
+      setCreateErrorMessage("Album name is required.");
+      return;
+    }
+
+    const token = getStoredToken();
+
+    if (!token) {
+      setCreateErrorMessage("Missing authentication token. Please log in again.");
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const response = await fetch("http://localhost:5000/api/albums", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          description: description || undefined,
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | CreateAlbumResponse
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to create album.");
+      }
+
+      if (data && "album" in data) {
+        setAlbums((currentAlbums) => [mapApiAlbum(data.album), ...currentAlbums]);
+      }
+
+      form.reset();
+      setCreateErrorMessage("");
+      setIsModalOpen(false);
+    } catch (error) {
+      setCreateErrorMessage(
+        error instanceof Error ? error.message : "Failed to create album.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteAlbum = async () => {
+    if (!albumToDelete) {
+      return;
+    }
+
+    setDeleteErrorMessage("");
+    const transitionStartedAt = startActionTransition();
+    setIsActionTransitioning(true);
+
+    const token = getStoredToken();
+
+    if (!token) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      const message = "Missing authentication token. Please log in again.";
+      setDeleteErrorMessage(message);
+      setFeedback({
+        icon: "!",
+        title: "Delete failed",
+        message,
+        type: "error",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/albums/${encodeURIComponent(
+          albumToDelete.id,
+        )}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | DeleteAlbumResponse
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to delete album.");
+      }
+
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setAlbums((currentAlbums) =>
+        currentAlbums.filter((album) => album.id !== albumToDelete.id),
+      );
+      setAlbumToDelete(null);
+      setFeedback({
+        icon: "A",
+        title: "Album Deleted",
+        message: data?.message || "Album deleted successfully 💚",
+        type: "success",
+      });
+    } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      const message =
+        error instanceof Error ? error.message : "Failed to delete album.";
+      setDeleteErrorMessage(message);
+      setFeedback({
+        icon: "!",
+        title: "Delete failed",
+        message,
+        type: "error",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <motion.div
@@ -370,7 +599,7 @@ export default function AlbumsPage() {
         ))}
       </motion.section>
 
-      {/* Featured Album */}
+      {featuredAlbum ? (
       <motion.section
         variants={fadeUp}
         whileHover={{ y: -4 }}
@@ -379,11 +608,17 @@ export default function AlbumsPage() {
       >
         <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="relative min-h-[18rem] overflow-hidden sm:min-h-[22rem] lg:min-h-full">
-            <img
-              src={featuredAlbum.image}
-              alt=""
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-            />
+            {featuredAlbum.image ? (
+              <img
+                src={featuredAlbum.image}
+                alt=""
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex h-full min-h-[18rem] w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-5xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105">
+                A
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-slate-950/5 to-transparent" />
             <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between gap-4">
               <ThumbnailStack images={featuredAlbum.thumbnails} />
@@ -419,8 +654,60 @@ export default function AlbumsPage() {
           </div>
         </div>
       </motion.section>
+      ) : null}
 
       {/* Album Grid */}
+      {isLoading ? (
+        <motion.section
+          variants={staggerContainer}
+          className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        >
+          {Array.from({ length: 8 }).map((_, index) => (
+            <motion.article
+              key={index}
+              variants={fadeUp}
+              className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5"
+            >
+              <div className="h-44 animate-pulse bg-slate-100" />
+              <div className="space-y-4 p-5">
+                <div className="h-5 w-2/3 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-4 w-1/3 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-12 animate-pulse rounded-2xl bg-slate-100" />
+              </div>
+            </motion.article>
+          ))}
+        </motion.section>
+      ) : errorMessage ? (
+        <motion.section
+          variants={fadeUp}
+          className="rounded-[2rem] border border-red-100 bg-white p-8 text-center shadow-sm shadow-red-950/5"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-xl font-semibold text-red-600">
+            !
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold text-slate-950">
+            Unable to load albums.
+          </h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            {errorMessage}
+          </p>
+        </motion.section>
+      ) : albums.length === 0 ? (
+        <motion.section
+          variants={fadeUp}
+          className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm shadow-slate-950/5"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl font-semibold text-emerald-700">
+            A
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold text-slate-950">
+            No albums yet.
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Create your first collection of memories.
+          </p>
+        </motion.section>
+      ) : (
       <motion.section
         variants={staggerContainer}
         className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
@@ -433,26 +720,11 @@ export default function AlbumsPage() {
             onToggleMenu={(id) =>
               setOpenMenuId((current) => (current === id ? null : id))
             }
+            onDelete={openDeleteConfirmation}
           />
         ))}
       </motion.section>
-
-      {/* Empty State - keep hidden until there are no albums.
-      <motion.section
-        variants={fadeUp}
-        className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm shadow-slate-950/5"
-      >
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl text-emerald-700">
-          ▣
-        </div>
-        <h2 className="mt-5 text-2xl font-semibold text-slate-950">
-          No albums yet.
-        </h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Create your first collection of memories.
-        </p>
-      </motion.section>
-      */}
+      )}
 
       {/* New Album Modal */}
       <AnimatePresence>
@@ -474,7 +746,7 @@ export default function AlbumsPage() {
               className="my-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
             >
               <form
-                onSubmit={(event) => event.preventDefault()}
+                onSubmit={handleCreateAlbum}
                 className="max-h-[90vh] overflow-y-auto p-5 sm:p-7"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -489,15 +761,14 @@ export default function AlbumsPage() {
                       New Album
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Organize a new memory collection. Saving will be wired up
-                      later.
+                      Organize a new memory collection.
                     </p>
                   </div>
 
                   <button
                     type="button"
                     aria-label="Close new album modal"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={closeCreateModal}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
                   >
                     ×
@@ -522,16 +793,20 @@ export default function AlbumsPage() {
                   <div className="grid gap-4">
                     <FormField label="Album name">
                       <input
+                        name="name"
                         type="text"
                         placeholder="Family, Travel, Coding..."
+                        disabled={isCreating}
                         className={inputClasses()}
                       />
                     </FormField>
 
                     <FormField label="Description">
                       <textarea
+                        name="description"
                         placeholder="Describe this collection..."
                         rows={5}
+                        disabled={isCreating}
                         className={`${inputClasses()} resize-none`}
                       />
                     </FormField>
@@ -545,19 +820,27 @@ export default function AlbumsPage() {
                   </div>
                 </div>
 
+                {createErrorMessage ? (
+                  <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                    {createErrorMessage}
+                  </div>
+                ) : null}
+
                 <div className="mt-7 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={closeCreateModal}
+                    disabled={isCreating}
                     className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    disabled={isCreating}
                     className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25"
                   >
-                    Create Album
+                    {isCreating ? "Creating..." : "Create Album"}
                   </button>
                 </div>
               </form>
@@ -565,6 +848,83 @@ export default function AlbumsPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <FeedbackDialog
+        isOpen={Boolean(feedback)}
+        icon={feedback?.icon ?? ""}
+        title={feedback?.title ?? ""}
+        message={feedback?.message}
+        type={feedback?.type ?? "success"}
+        onDismiss={() => setFeedback(null)}
+      />
+
+      <ActionTransitionOverlay isOpen={isActionTransitioning} />
+
+      <AnimatePresence>
+        {albumToDelete ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-album-title"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.96 }}
+              transition={{ duration: 0.26, ease: easeOut }}
+              className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20 sm:p-7"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-xl font-semibold text-red-600">
+                !
+              </div>
+              <h2
+                id="delete-album-title"
+                className="mt-5 text-2xl font-semibold tracking-tight text-slate-950"
+              >
+                Delete this album?
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-slate-500">
+                This will remove{" "}
+                <span className="font-semibold text-slate-700">
+                  {albumToDelete.name}
+                </span>{" "}
+                from your albums. Memories inside it will stay saved.
+              </p>
+
+              {deleteErrorMessage ? (
+                <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {deleteErrorMessage}
+                </div>
+              ) : null}
+
+              <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeleteConfirmation}
+                  disabled={isDeleting}
+                  className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAlbum}
+                  disabled={isDeleting}
+                  className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-red-600/15 transition duration-300 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isDeleting ? "Deleting..." : "Delete Album"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   );
 }
+
+

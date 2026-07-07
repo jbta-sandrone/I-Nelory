@@ -1,10 +1,19 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
+import {
+  startActionTransition,
+  waitForActionTransition,
+} from "../utils/actionTransition";
+import FeedbackDialog, {
+  type FeedbackState,
+} from "../components/FeedbackDialog";
+import type { ApiMemory } from "../components/NewMemoryModal";
 
 type ArchiveAction = "restore" | "delete" | null;
 
 type ArchivedMemory = {
-  id: number;
+  id: string;
   title: string;
   date: string;
   archivedDate: string;
@@ -12,6 +21,16 @@ type ArchivedMemory = {
   type: "Photo" | "Video" | "Story";
   album: string;
   image: string;
+};
+
+type MemoriesResponse = {
+  message: string;
+  memories: ApiMemory[];
+};
+
+type MemoryResponse = {
+  message?: string;
+  memory?: ApiMemory;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -41,114 +60,8 @@ const staggerContainer: Variants = {
   },
 };
 
-const stats = [
-  { label: "Archived Memories", value: "18", icon: "◫" },
-  { label: "Archived Photos", value: "12", icon: "◇" },
-  { label: "Archived Videos", value: "4", icon: "▶" },
-  { label: "Recently Archived", value: "3", icon: "◷" },
-];
-
-const archivedMemories: ArchivedMemory[] = [
-  {
-    id: 1,
-    title: "Old Beach Draft",
-    date: "July 2, 2026",
-    archivedDate: "Archived today",
-    caption: "A quiet beach photo saved for later sorting.",
-    type: "Photo",
-    album: "Travel",
-    image:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 2,
-    title: "Blurry Family Shot",
-    date: "June 30, 2026",
-    archivedDate: "Archived yesterday",
-    caption: "A soft, imperfect frame from a family morning.",
-    type: "Photo",
-    album: "Family",
-    image:
-      "https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 3,
-    title: "Journal Fragment",
-    date: "June 22, 2026",
-    archivedDate: "Archived 2 days ago",
-    caption: "A short reflection that may belong in a different album.",
-    type: "Story",
-    album: "Journal",
-    image:
-      "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 4,
-    title: "City Clip",
-    date: "June 10, 2026",
-    archivedDate: "Archived 4 days ago",
-    caption: "A short evening clip from a walk downtown.",
-    type: "Video",
-    album: "Travel",
-    image:
-      "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 5,
-    title: "Gym Progress",
-    date: "May 28, 2026",
-    archivedDate: "Archived last week",
-    caption: "A progress photo hidden while the album is being cleaned up.",
-    type: "Photo",
-    album: "Gym",
-    image:
-      "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 6,
-    title: "Old Birthday Video",
-    date: "May 14, 2026",
-    archivedDate: "Archived May 20",
-    caption: "A birthday clip kept safe outside the main memories grid.",
-    type: "Video",
-    album: "Birthdays",
-    image:
-      "https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 7,
-    title: "Campus Notes",
-    date: "April 18, 2026",
-    archivedDate: "Archived May 4",
-    caption: "A school memory tucked away while organizing college photos.",
-    type: "Story",
-    album: "College",
-    image:
-      "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 8,
-    title: "Sunset Duplicate",
-    date: "March 26, 2026",
-    archivedDate: "Archived April 8",
-    caption: "A duplicate sunset frame preserved until review.",
-    type: "Photo",
-    album: "Friends",
-    image:
-      "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 9,
-    title: "Pet Outtake",
-    date: "March 3, 2026",
-    archivedDate: "Archived March 12",
-    caption: "A sweet but messy pet photo hidden from the main album.",
-    type: "Photo",
-    album: "Pets",
-    image:
-      "https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=900&q=80",
-  },
-];
+const fallbackMediaUrl =
+  "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=900&q=80";
 
 const typeStyles: Record<ArchivedMemory["type"], string> = {
   Photo: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -160,14 +73,86 @@ function inputClasses() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/15";
 }
 
+function getStoredToken() {
+  return localStorage.getItem("i-nelory.auth.token");
+}
+
+function getMemoryType(mediaType?: string | null): ArchivedMemory["type"] {
+  const normalizedType = mediaType?.toLowerCase() ?? "";
+
+  if (normalizedType.includes("video")) {
+    return "Video";
+  }
+
+  if (normalizedType.includes("story") || normalizedType.includes("text")) {
+    return "Story";
+  }
+
+  return "Photo";
+}
+
+function formatMemoryDate(memoryDate?: string | null) {
+  if (!memoryDate) {
+    return "No date";
+  }
+
+  const date = new Date(memoryDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return memoryDate;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatArchivedDate(updatedAt?: string | null) {
+  if (!updatedAt) {
+    return "Archived";
+  }
+
+  const date = new Date(updatedAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Archived";
+  }
+
+  return `Archived ${new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(date)}`;
+}
+
+function mapApiMemory(memory: ApiMemory): ArchivedMemory {
+  const type = getMemoryType(memory.mediaType);
+
+  return {
+    id: memory.id,
+    title: memory.title?.trim() || "Untitled memory",
+    date: formatMemoryDate(memory.memoryDate),
+    archivedDate: formatArchivedDate(memory.updatedAt),
+    caption: memory.description?.trim() || "No description yet.",
+    type,
+    album: memory.albumId ? "Album" : "Memory",
+    image: memory.mediaUrl?.trim() || fallbackMediaUrl,
+  };
+}
+
 function ConfirmationModal({
   action,
   memory,
+  isWorking,
   onClose,
+  onConfirm,
 }: {
   action: ArchiveAction;
   memory: ArchivedMemory | null;
+  isWorking: boolean;
   onClose: () => void;
+  onConfirm: () => void;
 }) {
   if (!action || !memory) {
     return null;
@@ -198,7 +183,7 @@ function ConfirmationModal({
               : "bg-emerald-50 text-emerald-700"
           }`}
         >
-          {isDelete ? "!" : "↺"}
+          {isDelete ? "!" : "R"}
         </div>
 
         <h2 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">
@@ -214,20 +199,28 @@ function ConfirmationModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5"
+            disabled={isWorking}
+            className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className={`rounded-full px-6 py-3 text-sm font-semibold text-white shadow-lg transition duration-300 hover:-translate-y-0.5 hover:shadow-xl ${
+            onClick={onConfirm}
+            disabled={isWorking}
+            className={`rounded-full px-6 py-3 text-sm font-semibold text-white shadow-lg transition duration-300 hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70 ${
               isDelete
                 ? "bg-red-600 shadow-red-600/20 hover:bg-red-700 hover:shadow-red-600/25"
                 : "bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700 hover:shadow-emerald-600/25"
             }`}
           >
-            {isDelete ? "Delete Permanently" : "Restore Memory"}
+            {isWorking
+              ? isDelete
+                ? "Deleting..."
+                : "Restoring..."
+              : isDelete
+                ? "Delete Permanently"
+                : "Restore Memory"}
           </button>
         </div>
       </motion.div>
@@ -236,11 +229,79 @@ function ConfirmationModal({
 }
 
 export default function ArchivePage() {
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [archivedMemories, setArchivedMemories] = useState<ArchivedMemory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
   const [selectedMemory, setSelectedMemory] = useState<ArchivedMemory | null>(
     null,
   );
   const [modalAction, setModalAction] = useState<ArchiveAction>(null);
+  const [isWorking, setIsWorking] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [isActionTransitioning, setIsActionTransitioning] = useState(false);
+
+  const showFeedback = useCallback((nextFeedback: FeedbackState) => {
+    setFeedback({ type: "success", ...nextFeedback });
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchArchivedMemories() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      try {
+        const token = getStoredToken();
+
+        if (!token) {
+          throw new Error("Missing authentication token. Please log in again.");
+        }
+
+        const response = await fetch(
+          "http://localhost:5000/api/memories/archive",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          },
+        );
+
+        const data = (await response.json().catch(() => null)) as
+          | MemoriesResponse
+          | { message?: string }
+          | null;
+
+        if (!response.ok || !data || !("memories" in data)) {
+          throw new Error(data?.message || "Failed to fetch archived memories.");
+        }
+
+        setArchivedMemories(data.memories.map(mapApiMemory));
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setArchivedMemories([]);
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch archived memories.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchArchivedMemories();
+
+    return () => controller.abort();
+  }, []);
 
   const openModal = (memory: ArchivedMemory, action: ArchiveAction) => {
     setSelectedMemory(memory);
@@ -249,9 +310,194 @@ export default function ArchivePage() {
   };
 
   const closeModal = () => {
-    setModalAction(null);
-    setSelectedMemory(null);
+    if (!isWorking) {
+      setModalAction(null);
+      setSelectedMemory(null);
+    }
   };
+
+  const restoreMemory = async (memory: ArchivedMemory) => {
+    const previousMemories = archivedMemories;
+    const transitionStartedAt = startActionTransition();
+
+    setIsWorking(true);
+    setIsActionTransitioning(true);
+
+    const token = getStoredToken();
+
+    if (!token) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setArchivedMemories(previousMemories);
+      setIsWorking(false);
+      showFeedback({
+        icon: "!",
+        title: "Restore failed",
+        message: "Missing authentication token. Please log in again.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/memories/${encodeURIComponent(
+          memory.id,
+        )}/archive`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | MemoryResponse
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to restore memory.");
+      }
+
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setArchivedMemories((currentMemories) =>
+        currentMemories.filter((currentMemory) => currentMemory.id !== memory.id),
+      );
+      setModalAction(null);
+      setSelectedMemory(null);
+      showFeedback({
+        icon: "\u{1F49A}",
+        title: "Memory restored successfully \u{1F49A}",
+        message: "This memory returned to Memories.",
+      });
+    } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setArchivedMemories(previousMemories);
+      showFeedback({
+        icon: "!",
+        title: "Restore failed",
+        message:
+          error instanceof Error ? error.message : "Failed to restore memory.",
+        type: "error",
+      });
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const deleteArchivedMemory = async (memory: ArchivedMemory) => {
+    const previousMemories = archivedMemories;
+    const transitionStartedAt = startActionTransition();
+
+    setIsWorking(true);
+    setIsActionTransitioning(true);
+
+    const token = getStoredToken();
+
+    if (!token) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setArchivedMemories(previousMemories);
+      setIsWorking(false);
+      showFeedback({
+        icon: "!",
+        title: "Delete failed",
+        message: "Missing authentication token. Please log in again.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/memories/${encodeURIComponent(memory.id)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to delete memory.");
+      }
+
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setArchivedMemories((currentMemories) =>
+        currentMemories.filter((currentMemory) => currentMemory.id !== memory.id),
+      );
+      setModalAction(null);
+      setSelectedMemory(null);
+      showFeedback({
+        icon: "M",
+        title: "Memory Deleted",
+        message: "The memory has been removed.",
+      });
+    } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setArchivedMemories(previousMemories);
+      showFeedback({
+        icon: "!",
+        title: "Delete failed",
+        message:
+          error instanceof Error ? error.message : "Failed to delete memory.",
+        type: "error",
+      });
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const confirmArchiveAction = () => {
+    if (!selectedMemory) {
+      return;
+    }
+
+    if (modalAction === "restore") {
+      void restoreMemory(selectedMemory);
+    }
+
+    if (modalAction === "delete") {
+      void deleteArchivedMemory(selectedMemory);
+    }
+  };
+
+  const stats = [
+    {
+      label: "Archived Memories",
+      value: String(archivedMemories.length),
+      icon: "\u25ab",
+    },
+    {
+      label: "Archived Photos",
+      value: String(
+        archivedMemories.filter((memory) => memory.type === "Photo").length,
+      ),
+      icon: "\u25c7",
+    },
+    {
+      label: "Archived Videos",
+      value: String(
+        archivedMemories.filter((memory) => memory.type === "Video").length,
+      ),
+      icon: "\u25b7",
+    },
+    {
+      label: "Recently Archived",
+      value: String(Math.min(archivedMemories.length, 3)),
+      icon: "\u25b7",
+    },
+  ];
 
   return (
     <motion.div
@@ -272,7 +518,7 @@ export default function ArchivePage() {
           </p>
           <h1 className="mt-3 flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-xl text-emerald-700">
-              ◫
+              {"\u25ab"}
             </span>
             Archive
           </h1>
@@ -289,7 +535,7 @@ export default function ArchivePage() {
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-xl text-emerald-700 shadow-sm">
-            ⓘ
+            i
           </span>
           <div>
             <h2 className="text-lg font-semibold text-slate-950">
@@ -353,10 +599,8 @@ export default function ArchivePage() {
 
           <select aria-label="Filter by album" className={inputClasses()}>
             <option>All albums</option>
-            <option>Family</option>
-            <option>Travel</option>
-            <option>Journal</option>
-            <option>College</option>
+            <option>Memory</option>
+            <option>Album</option>
           </select>
 
           <select aria-label="Sort archived memories" className={inputClasses()}>
@@ -367,133 +611,192 @@ export default function ArchivePage() {
       </motion.section>
 
       {/* Archived Memory Grid */}
-      <motion.section
-        variants={staggerContainer}
-        className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-      >
-        {archivedMemories.map((memory) => (
-          <motion.article
-            key={memory.id}
-            variants={fadeUp}
-            whileHover={{ y: -6, scale: 1.01 }}
-            transition={{ duration: 0.35 }}
-            className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
-          >
-            <div className="relative h-52 overflow-hidden">
-              <img
-                src={memory.image}
-                alt=""
-                className="h-full w-full object-cover grayscale-[20%] transition duration-500 group-hover:scale-105 group-hover:grayscale-0"
-              />
-              <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${typeStyles[memory.type]}`}
-                >
-                  {memory.type}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => openModal(memory, "restore")}
-                  className="rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
-                >
-                  Restore
-                </button>
+      {isLoading ? (
+        <motion.section
+          variants={staggerContainer}
+          className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        >
+          {Array.from({ length: 8 }).map((_, index) => (
+            <motion.article
+              key={index}
+              variants={fadeUp}
+              className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5"
+            >
+              <div className="h-52 animate-pulse bg-slate-100" />
+              <div className="space-y-4 p-5">
+                <div className="h-5 w-2/3 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-4 w-1/3 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
               </div>
-            </div>
-
-            <div className="space-y-4 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold text-slate-950">
-                    {memory.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">{memory.date}</p>
-                </div>
-
-                <div className="relative shrink-0">
+            </motion.article>
+          ))}
+        </motion.section>
+      ) : errorMessage ? (
+        <motion.section
+          variants={fadeUp}
+          className="rounded-[2rem] border border-red-100 bg-white p-8 text-center shadow-sm shadow-red-950/5"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-xl font-semibold text-red-600">
+            !
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold text-slate-950">
+            Unable to load archive.
+          </h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            {errorMessage}
+          </p>
+        </motion.section>
+      ) : archivedMemories.length === 0 ? (
+        <motion.section
+          variants={fadeUp}
+          className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm shadow-slate-950/5"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl font-semibold text-emerald-700">
+            {"\u25ab"}
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold text-slate-950">
+            Your archive is empty.
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Archived memories will appear here.
+          </p>
+        </motion.section>
+      ) : (
+        <motion.section
+          variants={staggerContainer}
+          className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        >
+          {archivedMemories.map((memory) => (
+            <motion.article
+              key={memory.id}
+              variants={fadeUp}
+              whileHover={{ y: -6, scale: 1.01 }}
+              transition={{ duration: 0.35 }}
+              className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+            >
+              <div className="relative h-52 overflow-hidden">
+                {memory.type === "Video" ? (
+                  <video
+                    src={memory.image}
+                    className="h-full w-full object-cover grayscale-[20%] transition duration-500 group-hover:scale-105 group-hover:grayscale-0"
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={memory.image}
+                    alt=""
+                    className="h-full w-full object-cover grayscale-[20%] transition duration-500 group-hover:scale-105 group-hover:grayscale-0"
+                  />
+                )}
+                <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${typeStyles[memory.type]}`}
+                  >
+                    {memory.type}
+                  </span>
                   <button
                     type="button"
-                    aria-label={`Open menu for ${memory.title}`}
-                    onClick={() =>
-                      setOpenMenuId((current) =>
-                        current === memory.id ? null : memory.id,
-                      )
-                    }
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg leading-none text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
+                    onClick={() => openModal(memory, "restore")}
+                    className="rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
                   >
-                    ⋯
+                    Restore
                   </button>
-
-                  <AnimatePresence>
-                    {openMenuId === memory.id ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                        transition={{ duration: 0.18 }}
-                        className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => openModal(memory, "restore")}
-                          className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
-                        >
-                          Restore
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openModal(memory, "delete")}
-                          className="block w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
-                        >
-                          Delete Permanently
-                        </button>
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
                 </div>
               </div>
 
-              <p className="line-clamp-2 text-sm leading-6 text-slate-600">
-                {memory.caption}
-              </p>
+              <div className="space-y-4 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-semibold text-slate-950">
+                      {memory.title}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {memory.date}
+                    </p>
+                  </div>
 
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                  {memory.album}
-                </span>
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  {memory.archivedDate}
-                </span>
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label={`Open menu for ${memory.title}`}
+                      onClick={() =>
+                        setOpenMenuId((current) =>
+                          current === memory.id ? null : memory.id,
+                        )
+                      }
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg leading-none text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
+                    >
+                      &hellip;
+                    </button>
+
+                    <AnimatePresence>
+                      {openMenuId === memory.id ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                          transition={{ duration: 0.18 }}
+                          className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => openModal(memory, "restore")}
+                            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            Restore
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openModal(memory, "delete")}
+                            className="block w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
+                          >
+                            Delete Permanently
+                          </button>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                <p className="line-clamp-2 text-sm leading-6 text-slate-600">
+                  {memory.caption}
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    {memory.album}
+                  </span>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    {memory.archivedDate}
+                  </span>
+                </div>
               </div>
-            </div>
-          </motion.article>
-        ))}
-      </motion.section>
-
-      {/* Empty State - keep hidden until the archive is empty.
-      <motion.section
-        variants={fadeUp}
-        className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm shadow-slate-950/5"
-      >
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl text-emerald-700">
-          ◫
-        </div>
-        <h2 className="mt-5 text-2xl font-semibold text-slate-950">
-          Your archive is empty.
-        </h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Archived memories will appear here.
-        </p>
-      </motion.section>
-      */}
+            </motion.article>
+          ))}
+        </motion.section>
+      )}
 
       <AnimatePresence>
         <ConfirmationModal
           action={modalAction}
           memory={selectedMemory}
+          isWorking={isWorking}
           onClose={closeModal}
+          onConfirm={confirmArchiveAction}
         />
       </AnimatePresence>
+
+      <FeedbackDialog
+        isOpen={Boolean(feedback)}
+        icon={feedback?.icon ?? ""}
+        title={feedback?.title ?? ""}
+        message={feedback?.message}
+        type={feedback?.type ?? "success"}
+        onDismiss={() => setFeedback(null)}
+      />
+
+      <ActionTransitionOverlay isOpen={isActionTransitioning} />
     </motion.div>
   );
 }

@@ -7,6 +7,7 @@ export const createMemorySchema = z.object({
   mediaType: z.enum(["IMAGE", "VIDEO"]).optional(),
   memoryDate: z.string().optional(),
   location: z.string().optional(),
+  albumId: z.string().nullable().optional(),
 });
 
 export const updateMemorySchema = z.object({
@@ -14,4 +15,9 @@ export const updateMemorySchema = z.object({
   description: z.string().nullable().optional(),
   memoryDate: z.string().nullable().optional(),
   location: z.string().nullable().optional(),
+  albumId: z.string().nullable().optional(),
+});
+
+export const assignMemoryAlbumSchema = z.object({
+  albumId: z.string().nullable(),
 });

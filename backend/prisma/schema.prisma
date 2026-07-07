@@ -55,6 +55,7 @@ model Memory {
   title       String
   description String?
   mediaUrl    String?
+  mediaPublicId String?
   mediaType   MediaType?
   tags        Tag[]
   memoryDate  DateTime?

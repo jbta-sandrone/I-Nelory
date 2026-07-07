@@ -1,10 +1,14 @@
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.js";
 import {
+  assignUserMemoryAlbum,
   createUserMemory,
   deleteUserMemory,
+  getUserArchivedMemories,
   getUserMemories,
   updateUserMemory,
+  toggleArchiveMemory,
+  toggleFavoriteMemory,
 } from "../services/memory.service.js";
 import {
   CreateMemoryRequest,
@@ -20,6 +24,15 @@ export const getMemories = async (req: AuthRequest, res: Response) => {
     });
 };
 
+export const getArchivedMemories = async (req: AuthRequest, res: Response) => {
+    const memories = await getUserArchivedMemories(req.userId!);
+
+    return res.json({
+        message: "Archived memories fetched successfully ðŸ’š",
+        memories,
+    });
+};
+
 export const createMemory = async (
     req: AuthRequest,
     res: Response
@@ -27,7 +40,8 @@ export const createMemory = async (
     try {
         const memory = await createUserMemory(
             req.userId!,
-            req.body as CreateMemoryRequest
+            req.body as CreateMemoryRequest,
+            req.file
         );
 
         return res.status(201).json({
@@ -51,8 +65,11 @@ export const deleteMemory = async (req: AuthRequest, res: Response) => {
       message: "Memory deleted successfully 💚",
     });
   } catch (error) {
-    return res.status(404).json({
-      message: error instanceof Error ? error.message : "Failed to delete memory",
+    const message =
+      error instanceof Error ? error.message : "Failed to delete memory";
+
+    return res.status(message === "Memory not found" ? 404 : 400).json({
+      message,
     });
   }
 };
@@ -77,6 +94,74 @@ export const updateMemory = async (req: AuthRequest, res: Response) => {
 
     return res.status(message === "Memory not found" ? 404 : 400).json({
       message,
+    });
+  }
+};
+
+export const assignMemoryAlbum = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+
+    const memory = await assignUserMemoryAlbum(
+      req.userId!,
+      id,
+      req.body.albumId
+    );
+
+    return res.status(200).json({
+      message: memory.albumId
+        ? "Memory assigned to album successfully"
+        : "Memory removed from album successfully",
+      memory,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to update memory album";
+
+    return res
+      .status(message === "Memory not found" || message === "Album not found" ? 404 : 400)
+      .json({
+        message,
+      });
+  }
+};
+
+export const toggleFavorite = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+
+    const memory = await toggleFavoriteMemory(req.userId!, id);
+
+    return res.status(200).json({
+      message: memory.isFavorite
+        ? "Memory added to favorites 💚"
+        : "Memory removed from favorites 💚",
+      memory,
+    });
+  } catch (error) {
+    return res.status(404).json({
+      message:
+        error instanceof Error ? error.message : "Failed to update favorite",
+    });
+  }
+};
+
+export const toggleArchive = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+
+    const memory = await toggleArchiveMemory(req.userId!, id);
+
+    return res.status(200).json({
+      message: memory.isArchived
+        ? "Memory archived successfully ðŸ’š"
+        : "Memory restored successfully ðŸ’š",
+      memory,
+    });
+  } catch (error) {
+    return res.status(404).json({
+      message:
+        error instanceof Error ? error.message : "Failed to update archive",
     });
   }
 };

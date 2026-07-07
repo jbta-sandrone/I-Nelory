@@ -1,5 +1,13 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
+import {
+  startActionTransition,
+  waitForActionTransition,
+} from "../utils/actionTransition";
+import FeedbackDialog, {
+  type FeedbackState,
+} from "../components/FeedbackDialog";
 import NewMemoryModal, {
   type ApiMemory,
   type EditableMemory,
@@ -20,11 +28,17 @@ type Memory = {
   tags: string[];
   image: string;
   favorite: boolean;
+  albumId: string | null;
 };
 
 type MemoriesResponse = {
   message: string;
   memories: ApiMemory[];
+};
+
+type MemoryResponse = {
+  message?: string;
+  memory?: ApiMemory;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -134,6 +148,7 @@ function mapApiMemory(memory: ApiMemory): Memory {
     tags: tags.length > 0 ? tags : ["Memory"],
     image: memory.mediaUrl?.trim() || fallbackMediaUrl,
     favorite: memory.isFavorite,
+    albumId: memory.albumId ?? null,
   };
 }
 
@@ -143,10 +158,17 @@ export default function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [favoriteErrorMessage, setFavoriteErrorMessage] = useState("");
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [isActionTransitioning, setIsActionTransitioning] = useState(false);
   const [memoryToDelete, setMemoryToDelete] = useState<Memory | null>(null);
   const [memoryToEdit, setMemoryToEdit] = useState<EditableMemory | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
+
+  const showFeedback = useCallback((nextFeedback: FeedbackState) => {
+    setFeedback({ type: "success", ...nextFeedback });
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -220,6 +242,11 @@ export default function MemoriesPage() {
         return [nextMemory, ...currentMemories];
       });
       setErrorMessage("");
+      showFeedback({
+        icon: "M",
+        title: "Memory Created",
+        message: "Your memory has been saved.",
+      });
     };
 
     window.addEventListener("i-nelory.memory.created", handleMemoryCreated);
@@ -230,7 +257,7 @@ export default function MemoriesPage() {
         handleMemoryCreated,
       );
     };
-  }, []);
+  }, [showFeedback]);
 
   useEffect(() => {
     const handleMemoryUpdated = (event: Event) => {
@@ -247,6 +274,11 @@ export default function MemoriesPage() {
       );
       setMemoryToEdit(null);
       setErrorMessage("");
+      showFeedback({
+        icon: "M",
+        title: "Memory Updated",
+        message: "Your changes have been saved.",
+      });
     };
 
     window.addEventListener("i-nelory.memory.updated", handleMemoryUpdated);
@@ -257,7 +289,7 @@ export default function MemoriesPage() {
         handleMemoryUpdated,
       );
     };
-  }, []);
+  }, [showFeedback]);
 
   const openEditModal = (memory: Memory) => {
     setOpenMenuId(null);
@@ -267,7 +299,166 @@ export default function MemoriesPage() {
       description: memory.description,
       memoryDate: memory.memoryDate,
       location: memory.location,
+      albumId: memory.albumId,
     });
+  };
+
+  const toggleFavorite = async (memory: Memory) => {
+    const previousFavorite = memory.favorite;
+    const nextFavorite = !memory.favorite;
+    const transitionStartedAt = startActionTransition();
+
+    setFavoriteErrorMessage("");
+    setIsActionTransitioning(true);
+
+    const token = getStoredToken();
+
+    if (!token) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setFavoriteErrorMessage(
+        "Missing authentication token. Please log in again.",
+      );
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/memories/${encodeURIComponent(
+          memory.id,
+        )}/favorite`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | MemoryResponse
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to update favorite.");
+      }
+
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+
+      if (data?.memory) {
+        setMemories((currentMemories) =>
+          currentMemories.map((currentMemory) =>
+            currentMemory.id === memory.id
+              ? mapApiMemory(data.memory as ApiMemory)
+              : currentMemory,
+          ),
+        );
+      } else {
+        setMemories((currentMemories) =>
+          currentMemories.map((currentMemory) =>
+            currentMemory.id === memory.id
+              ? { ...currentMemory, favorite: nextFavorite }
+              : currentMemory,
+          ),
+        );
+      }
+
+      if (data?.memory?.isFavorite ?? nextFavorite) {
+        showFeedback({
+          icon: "\u{1F49A}",
+          title: "Added to favorites \u{1F49A}",
+          message: "This memory is now in Favorites.",
+        });
+      } else {
+        showFeedback({
+          icon: "\u2661",
+          title: "Removed from favorites",
+          message: "This memory was removed from Favorites.",
+        });
+      }
+    } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setMemories((currentMemories) =>
+        currentMemories.map((currentMemory) =>
+          currentMemory.id === memory.id
+            ? { ...currentMemory, favorite: previousFavorite }
+            : currentMemory,
+        ),
+      );
+      setFavoriteErrorMessage(
+        error instanceof Error ? error.message : "Failed to update favorite.",
+      );
+    }
+  };
+
+  const archiveMemory = async (memory: Memory) => {
+    const previousMemories = memories;
+    const transitionStartedAt = startActionTransition();
+
+    setFavoriteErrorMessage("");
+    setOpenMenuId(null);
+    setIsActionTransitioning(true);
+
+    const token = getStoredToken();
+
+    if (!token) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setMemories(previousMemories);
+      showFeedback({
+        icon: "!",
+        title: "Archive failed",
+        message: "Missing authentication token. Please log in again.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/memories/${encodeURIComponent(
+          memory.id,
+        )}/archive`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data = (await response.json().catch(() => null)) as
+        | MemoryResponse
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to archive memory.");
+      }
+
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setMemories((currentMemories) =>
+        currentMemories.filter((currentMemory) => currentMemory.id !== memory.id),
+      );
+      showFeedback({
+        icon: "\u{1F49A}",
+        title: "Memory archived successfully \u{1F49A}",
+        message: "This memory was moved to Archive.",
+      });
+    } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
+      setMemories(previousMemories);
+      showFeedback({
+        icon: "!",
+        title: "Archive failed",
+        message:
+          error instanceof Error ? error.message : "Failed to archive memory.",
+        type: "error",
+      });
+    }
   };
 
   const closeMemoryModal = () => {
@@ -294,10 +485,14 @@ export default function MemoriesPage() {
     }
 
     setDeleteErrorMessage("");
+    const transitionStartedAt = startActionTransition();
+    setIsActionTransitioning(true);
 
     const token = getStoredToken();
 
     if (!token) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
       setDeleteErrorMessage("Missing authentication token. Please log in again.");
       return;
     }
@@ -325,11 +520,20 @@ export default function MemoriesPage() {
         throw new Error(data?.message || "Failed to delete memory.");
       }
 
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
       setMemories((currentMemories) =>
         currentMemories.filter((memory) => memory.id !== memoryToDelete.id),
       );
       setMemoryToDelete(null);
+      showFeedback({
+        icon: "M",
+        title: "Memory Deleted",
+        message: "The memory has been removed.",
+      });
     } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
       const message =
         error instanceof Error ? error.message : "Failed to delete memory.";
       console.error("Delete memory failed:", error);
@@ -412,6 +616,15 @@ export default function MemoriesPage() {
           </select>
         </div>
       </motion.section>
+
+      {favoriteErrorMessage ? (
+        <motion.div
+          variants={fadeUp}
+          className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+        >
+          {favoriteErrorMessage}
+        </motion.div>
+      ) : null}
 
       {/* Memory Grid */}
       {isLoading ? (
@@ -501,6 +714,7 @@ export default function MemoriesPage() {
                   <button
                     type="button"
                     aria-label={`Favorite ${memory.title}`}
+                    onClick={() => toggleFavorite(memory)}
                     className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white"
                   >
                     {memory.favorite ? "\u2665" : "\u2661"}
@@ -553,6 +767,10 @@ export default function MemoriesPage() {
 
                                 if (action === "Delete") {
                                   openDeleteConfirmation(memory);
+                                }
+
+                                if (action === "Archive") {
+                                  archiveMemory(memory);
                                 }
                               }}
                               className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
@@ -611,6 +829,17 @@ export default function MemoriesPage() {
         onClose={closeMemoryModal}
         memory={memoryToEdit}
       />
+
+      <FeedbackDialog
+        isOpen={Boolean(feedback)}
+        icon={feedback?.icon ?? ""}
+        title={feedback?.title ?? ""}
+        message={feedback?.message}
+        type={feedback?.type ?? "success"}
+        onDismiss={() => setFeedback(null)}
+      />
+
+      <ActionTransitionOverlay isOpen={isActionTransitioning} />
 
       <AnimatePresence>
         {memoryToDelete ? (

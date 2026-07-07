@@ -1,6 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
-import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import ActionTransitionOverlay from "./ActionTransitionOverlay";
+import {
+  startActionTransition,
+  waitForActionTransition,
+} from "../utils/actionTransition";
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -9,6 +14,7 @@ export type ApiMemory = {
   title: string | null;
   description?: string | null;
   mediaUrl?: string | null;
+  mediaPublicId?: string | null;
   mediaType?: string | null;
   memoryDate?: string | null;
   location?: string | null;
@@ -31,12 +37,24 @@ export type EditableMemory = {
   description?: string | null;
   memoryDate?: string | null;
   location?: string | null;
+  albumId?: string | null;
 };
 
 type NewMemoryModalProps = {
   isOpen: boolean;
   onClose: () => void;
   memory?: EditableMemory | null;
+};
+
+type ApiAlbum = {
+  id: string;
+  name: string;
+  description?: string | null;
+};
+
+type AlbumsResponse = {
+  message: string;
+  albums: ApiAlbum[];
 };
 
 function inputClasses() {
@@ -83,13 +101,124 @@ export default function NewMemoryModal({
 }: NewMemoryModalProps) {
   const isEditing = Boolean(memory);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [albums, setAlbums] = useState<ApiAlbum[]>([]);
+  const [isAlbumLoading, setIsAlbumLoading] = useState(false);
+  const [albumErrorMessage, setAlbumErrorMessage] = useState("");
+  const imagePreviewUrlRef = useRef("");
+
+  const clearSelectedImage = () => {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = "";
+    }
+
+    setSelectedImage(null);
+    setImagePreviewUrl("");
+    setUploadProgress(0);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrlRef.current) {
+        URL.revokeObjectURL(imagePreviewUrlRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchAlbums() {
+      setIsAlbumLoading(true);
+      setAlbumErrorMessage("");
+
+      try {
+        const token = getStoredToken();
+
+        if (!token) {
+          throw new Error("Missing authentication token. Please log in again.");
+        }
+
+        const response = await fetch("http://localhost:5000/api/albums", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        const data = (await response.json().catch(() => null)) as
+          | AlbumsResponse
+          | { message?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(data?.message || "Failed to load albums.");
+        }
+
+        setAlbums("albums" in (data ?? {}) ? (data as AlbumsResponse).albums : []);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setAlbums([]);
+        setAlbumErrorMessage(
+          error instanceof Error ? error.message : "Failed to load albums.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsAlbumLoading(false);
+        }
+      }
+    }
+
+    fetchAlbums();
+
+    return () => controller.abort();
+  }, [isOpen]);
 
   const closeModal = () => {
     if (!isSaving) {
       setErrorMessage("");
+      setAlbumErrorMessage("");
+      clearSelectedImage();
       onClose();
     }
+  };
+
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      clearSelectedImage();
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setErrorMessage("Please choose an image file. Video upload is disabled for now.");
+      clearSelectedImage();
+      return;
+    }
+
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    imagePreviewUrlRef.current = previewUrl;
+    setSelectedImage(file);
+    setImagePreviewUrl(previewUrl);
+    setErrorMessage("");
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -101,6 +230,7 @@ export default function NewMemoryModal({
     const description = String(formData.get("description") ?? "").trim();
     const memoryDate = String(formData.get("memoryDate") ?? "").trim();
     const location = String(formData.get("location") ?? "").trim();
+    const albumId = String(formData.get("albumId") ?? "").trim();
 
     setErrorMessage("");
 
@@ -116,35 +246,66 @@ export default function NewMemoryModal({
       return;
     }
 
+    const transitionStartedAt = startActionTransition();
+    let progressIntervalId: number | null = null;
     setIsSaving(true);
+    setIsTransitioning(true);
+
+    if (!isEditing) {
+      setUploadProgress(selectedImage ? 12 : 0);
+      progressIntervalId = window.setInterval(() => {
+        setUploadProgress((current) => (current >= 88 ? current : current + 12));
+      }, 220);
+    }
 
     try {
       const endpoint = memory
         ? `http://localhost:5000/api/memories/${encodeURIComponent(memory.id)}`
         : "http://localhost:5000/api/memories";
       const method = memory ? "PATCH" : "POST";
+      const createFormData = new FormData();
+
+      createFormData.append("title", title);
+
+      if (description) {
+        createFormData.append("description", description);
+      }
+
+      if (memoryDate) {
+        createFormData.append("memoryDate", memoryDate);
+      }
+
+      if (location) {
+        createFormData.append("location", location);
+      }
+
+      if (albumId) {
+        createFormData.append("albumId", albumId);
+      }
+
+      if (selectedImage) {
+        createFormData.append("image", selectedImage);
+      }
+
       const response = await fetch(endpoint, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          memory
-            ? {
-                title,
-                description: description || null,
-                memoryDate: memoryDate || null,
-                location: location || null,
-              }
-            : {
-                title,
-                description: description || undefined,
-                memoryDate: memoryDate || undefined,
-                location: location || undefined,
-                mediaType: "IMAGE",
-              },
-        ),
+        headers: memory
+          ? {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            }
+          : {
+              Authorization: `Bearer ${token}`,
+            },
+        body: memory
+          ? JSON.stringify({
+              title,
+              description: description || null,
+              memoryDate: memoryDate || null,
+              location: location || null,
+              albumId: albumId || null,
+            })
+          : createFormData,
       });
 
       const data = (await response.json().catch(() => null)) as
@@ -159,21 +320,34 @@ export default function NewMemoryModal({
         );
       }
 
+      if (progressIntervalId) {
+        window.clearInterval(progressIntervalId);
+        progressIntervalId = null;
+      }
+      setUploadProgress(selectedImage ? 100 : 0);
+      await waitForActionTransition(transitionStartedAt);
+      setIsTransitioning(false);
+      setIsSaving(false);
+      form.reset();
+      clearSelectedImage();
+      setErrorMessage("");
+      onClose();
+
       if (data && "memory" in data) {
         window.dispatchEvent(
           new CustomEvent<ApiMemory>(
             memory ? "i-nelory.memory.updated" : "i-nelory.memory.created",
             {
-            detail: data.memory,
+              detail: data.memory,
             },
           ),
         );
       }
-
-      form.reset();
-      setErrorMessage("");
-      onClose();
     } catch (error) {
+      if (progressIntervalId) {
+        window.clearInterval(progressIntervalId);
+      }
+      await waitForActionTransition(transitionStartedAt);
       const message =
         error instanceof Error
           ? error.message
@@ -181,16 +355,18 @@ export default function NewMemoryModal({
             ? "Failed to update memory."
             : "Failed to save memory.";
       console.error(memory ? "Update memory failed:" : "Create memory failed:", error);
+      setIsTransitioning(false);
+      setUploadProgress(0);
       setErrorMessage(message);
-    } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <AnimatePresence>
-      {isOpen ? (
-        <motion.div
+    <>
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -240,17 +416,62 @@ export default function NewMemoryModal({
 
               <div className="mt-7 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
                 <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5">
-                  <div className="flex min-h-64 flex-col items-center justify-center rounded-[1.25rem] border border-white bg-white/80 p-5 text-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-700">
-                      +
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-slate-950">
-                      Upload image or video
-                    </p>
-                    <p className="mt-2 max-w-48 text-xs leading-5 text-slate-500">
-                      Placeholder only. Real uploads will be added later.
-                    </p>
-                  </div>
+                  <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border border-white bg-white/80 p-5 text-center transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-emerald-950/5">
+                    <input
+                      name="image"
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      disabled={isSaving || isEditing}
+                      onChange={handleImageChange}
+                    />
+                    {imagePreviewUrl ? (
+                      <div className="w-full">
+                        <img
+                          src={imagePreviewUrl}
+                          alt=""
+                          className="h-52 w-full rounded-[1.1rem] object-cover shadow-lg shadow-slate-950/10"
+                        />
+                        <p className="mt-4 truncate text-sm font-semibold text-slate-950">
+                          {selectedImage?.name}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-700">
+                          +
+                        </div>
+                        <p className="mt-4 text-sm font-semibold text-slate-950">
+                          Upload image
+                        </p>
+                        <p className="mt-2 max-w-48 text-xs leading-5 text-slate-500">
+                          Choose a photo from your device. Video upload is disabled for now.
+                        </p>
+                      </>
+                    )}
+
+                    {isEditing ? (
+                      <p className="mt-4 text-xs font-medium text-slate-500">
+                        Image changes are available when creating a memory.
+                      </p>
+                    ) : null}
+
+                    {isSaving && selectedImage ? (
+                      <div className="mt-4 w-full">
+                        <div className="h-2 overflow-hidden rounded-full bg-emerald-100">
+                          <motion.div
+                            className="h-full rounded-full bg-emerald-600"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${uploadProgress}%` }}
+                            transition={{ duration: 0.25 }}
+                          />
+                        </div>
+                        <p className="mt-2 text-xs font-semibold text-emerald-700">
+                          Uploading image... {uploadProgress}%
+                        </p>
+                      </div>
+                    ) : null}
+                  </label>
                 </div>
 
                 <div className="grid gap-4">
@@ -311,12 +532,29 @@ export default function NewMemoryModal({
                     </FormField>
 
                     <FormField label="Album">
-                      <select name="album" className={inputClasses()}>
-                        <option>Family</option>
-                        <option>Travel</option>
-                        <option>Friends</option>
-                        <option>Archive</option>
+                      <select
+                        name="albumId"
+                        defaultValue={memory?.albumId ?? ""}
+                        disabled={isSaving}
+                        className={inputClasses()}
+                      >
+                        <option value="">No Album</option>
+                        {albums.map((album) => (
+                          <option key={album.id} value={album.id}>
+                            {album.name}
+                          </option>
+                        ))}
                       </select>
+                      {isAlbumLoading ? (
+                        <p className="mt-2 text-xs font-medium text-slate-500">
+                          Loading albums...
+                        </p>
+                      ) : null}
+                      {albumErrorMessage ? (
+                        <p className="mt-2 text-xs font-medium text-red-600">
+                          {albumErrorMessage}
+                        </p>
+                      ) : null}
                     </FormField>
                   </div>
                 </div>
@@ -353,8 +591,11 @@ export default function NewMemoryModal({
               </div>
             </form>
           </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <ActionTransitionOverlay isOpen={isTransitioning} />
+    </>
   );
 }
