@@ -163,6 +163,13 @@ export const deleteUserAlbum = async (userId: string, albumId: string) => {
     throw new Error("Album not found");
   }
 
+  // Delete album cover from Cloudinary if it exists
+  if (album.coverPublicId) {
+    await deleteAlbumCover(album.coverPublicId);
+  }
+
+  // Set all memories in this album to have no album (albumId = null)
+  // Then delete the album
   await prisma.$transaction([
     prisma.memory.updateMany({
       where: {

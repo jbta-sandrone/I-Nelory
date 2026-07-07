@@ -9,6 +9,7 @@ import {
   updateUserMemory,
   toggleArchiveMemory,
   toggleFavoriteMemory,
+  searchMemoriesByQuery,
 } from "../services/memory.service.js";
 import {
   CreateMemoryRequest,
@@ -162,6 +163,29 @@ export const toggleArchive = async (req: AuthRequest, res: Response) => {
     return res.status(404).json({
       message:
         error instanceof Error ? error.message : "Failed to update archive",
+    });
+  }
+};
+export const aiSearch = async (req: AuthRequest, res: Response) => {
+  try {
+    const { query } = req.body as { query: string };
+
+    if (!query || typeof query !== "string" || query.trim().length === 0) {
+      return res.status(400).json({
+        message: "Search query is required",
+      });
+    }
+
+    const memories = await searchMemoriesByQuery(req.userId!, query.trim());
+
+    return res.json({
+      message: "AI search completed successfully 💚",
+      memories,
+    });
+  } catch (error) {
+    console.error("AI Search error:", error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : "AI search failed",
     });
   }
 };

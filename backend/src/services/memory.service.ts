@@ -7,6 +7,7 @@ import {
   CreateMemoryRequest,
   UpdateMemoryRequest,
 } from "../types/memory.types.js";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const getVerifiedAlbumId = async (
   userId: string,
@@ -238,4 +239,76 @@ export const toggleArchiveMemory = async (
   });
 
   return updatedMemory;
+};
+
+export const searchMemoriesByQuery = async (
+  userId: string,
+  query: string
+) => {
+  // Fetch all non-archived memories for the user
+  const memories = await prisma.memory.findMany({
+    where: {
+      userId,
+      isArchived: false,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (memories.length === 0) {
+    return [];
+  }
+
+  // Initialize Gemini AI
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  // Create a prompt that asks Gemini to identify relevant memories
+  const memoryText = memories
+    .map(
+      (m) =>
+        `ID: ${m.id}\nTitle: ${m.title}\nDescription: ${m.description || ""}\nLocation: ${m.location || ""}\nDate: ${m.memoryDate ? m.memoryDate.toISOString() : "Unknown"}\n`
+    )
+    .join("\n---\n");
+
+  const prompt = `You are an AI assistant helping users find memories based on their search query.
+
+Given the following memories and a user's search query, identify which memories are relevant to the query. Return ONLY the IDs of the relevant memories as a JSON array. If no memories are relevant, return an empty array [].
+
+Return ONLY valid JSON with no additional text or markdown.
+
+User's Search Query: "${query}"
+
+Memories:
+${memoryText}
+
+Return format: ["id1", "id2", "id3"] or [] if none are relevant.`;
+
+  const result = await model.generateContent(prompt);
+  const responseText = result.response.text();
+
+  // Parse the response to extract memory IDs
+  let relevantIds: string[] = [];
+  try {
+    // Clean up the response text - remove markdown code blocks if present
+    const cleanedText = responseText
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+
+    relevantIds = JSON.parse(cleanedText);
+
+    if (!Array.isArray(relevantIds)) {
+      relevantIds = [];
+    }
+  } catch (error) {
+    console.error("Error parsing Gemini response:", responseText);
+    relevantIds = [];
+  }
+
+  // Filter memories to return only the relevant ones
+  const relevantMemories = memories.filter((m) => relevantIds.includes(m.id));
+
+  return relevantMemories;
 };

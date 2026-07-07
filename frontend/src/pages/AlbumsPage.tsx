@@ -243,7 +243,7 @@ function AlbumCard({
                 transition={{ duration: 0.18 }}
                 className="absolute right-0 top-11 z-20 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
               >
-                {["Edit", "Archive", "Delete"].map((action) => (
+                {["Edit", "Delete"].map((action) => (
                   <button
                     key={action}
                     type="button"

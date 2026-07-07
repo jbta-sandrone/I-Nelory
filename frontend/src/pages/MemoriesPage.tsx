@@ -8,6 +8,7 @@ import {
 import FeedbackDialog, {
   type FeedbackState,
 } from "../components/FeedbackDialog";
+import MemoryCard from "../components/MemoryCard";
 import NewMemoryModal, {
   type ApiMemory,
   type EditableMemory,
@@ -70,12 +71,6 @@ const staggerContainer: Variants = {
 
 const fallbackMediaUrl =
   "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=900&q=80";
-
-const typeStyles: Record<MemoryType, string> = {
-  Photo: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  Video: "bg-slate-950 text-white border-slate-950",
-  Story: "bg-white text-slate-700 border-slate-200",
-};
 
 const moods = [
   "All moods",
@@ -683,126 +678,20 @@ export default function MemoriesPage() {
           className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         >
           {memories.map((memory) => (
-            <motion.article
+            <MemoryCard
               key={memory.id}
-              variants={fadeUp}
-              whileHover={{ y: -6, scale: 1.01 }}
-              transition={{ duration: 0.35 }}
-              className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
-            >
-              <div className="relative h-52 overflow-hidden">
-                {memory.type === "Video" ? (
-                  <video
-                    src={memory.image}
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    muted
-                    playsInline
-                  />
-                ) : (
-                  <img
-                    src={memory.image}
-                    alt=""
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                  />
-                )}
-                <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${typeStyles[memory.type]}`}
-                  >
-                    {memory.type}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={`Favorite ${memory.title}`}
-                    onClick={() => toggleFavorite(memory)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white"
-                  >
-                    {memory.favorite ? "\u2665" : "\u2661"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-4 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-lg font-semibold text-slate-950">
-                      {memory.title}
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {memory.date}
-                    </p>
-                  </div>
-
-                  <div className="relative shrink-0">
-                    <button
-                      type="button"
-                      aria-label={`Open menu for ${memory.title}`}
-                      onClick={() =>
-                        setOpenMenuId((current) =>
-                          current === memory.id ? null : memory.id,
-                        )
-                      }
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg leading-none text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
-                    >
-                      &hellip;
-                    </button>
-
-                    <AnimatePresence>
-                      {openMenuId === memory.id ? (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                          transition={{ duration: 0.18 }}
-                          className="absolute right-0 top-11 z-20 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
-                        >
-                          {["Edit", "Archive", "Delete"].map((action) => (
-                            <button
-                              key={action}
-                              type="button"
-                              onClick={() => {
-                                if (action === "Edit") {
-                                  openEditModal(memory);
-                                }
-
-                                if (action === "Delete") {
-                                  openDeleteConfirmation(memory);
-                                }
-
-                                if (action === "Archive") {
-                                  archiveMemory(memory);
-                                }
-                              }}
-                              className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
-                            >
-                              {action}
-                            </button>
-                          ))}
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  </div>
-                </div>
-
-                <p className="line-clamp-2 text-sm leading-6 text-slate-600">
-                  {memory.caption}
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    {memory.mood}
-                  </span>
-                  {memory.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </motion.article>
+              memory={memory}
+              openMenuId={openMenuId}
+              onToggleMenu={(memoryId) =>
+                setOpenMenuId((current) =>
+                  current === memoryId ? null : memoryId,
+                )
+              }
+              onToggleFavorite={toggleFavorite}
+              onEdit={openEditModal}
+              onArchive={archiveMemory}
+              onDelete={openDeleteConfirmation}
+            />
           ))}
         </motion.section>
       )}
