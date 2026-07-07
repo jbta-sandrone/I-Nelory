@@ -15,6 +15,7 @@ import HomePage from "./pages/HomePage";
 import MemoriesPage from "./pages/MemoriesPage";
 import TimelinePage from "./pages/TimelinePage";
 import AlbumsPage from "./pages/AlbumsPage";
+import AlbumDetailPage from "./pages/AlbumDetailPage";
 import FavoritesPage from "./pages/FavoritesPage";
 import ArchivePage from "./pages/ArchivePage";
 import AISearchPage from "./pages/AISearchPage";
@@ -89,6 +90,7 @@ function App() {
             <Route path="memories" element={<MemoriesPage />} />
             <Route path="timeline" element={<TimelinePage />} />
             <Route path="albums" element={<AlbumsPage />} />
+            <Route path="albums/:id" element={<AlbumDetailPage />} />
             <Route path="favorites" element={<FavoritesPage />} />
             <Route path="archive" element={<ArchivePage />} />
             <Route path="ai-search" element={<AISearchPage />} />

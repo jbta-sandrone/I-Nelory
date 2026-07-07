@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import type { FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
 import FeedbackDialog, {
   type FeedbackState,
@@ -33,6 +34,7 @@ type ApiAlbum = {
   name: string;
   description?: string | null;
   coverUrl?: string | null;
+  coverPublicId?: string | null;
   memories?: ApiAlbumMemory[];
   _count?: {
     memories?: number;
@@ -172,19 +174,36 @@ function AlbumCard({
   album,
   openMenuId,
   onToggleMenu,
+  onOpen,
+  onEdit,
   onDelete,
 }: {
   album: Album;
   openMenuId: string | null;
   onToggleMenu: (id: string) => void;
+  onOpen: (album: Album) => void;
+  onEdit: (album: Album) => void;
   onDelete: (album: Album) => void;
 }) {
   return (
     <motion.article
+      role="button"
+      tabIndex={0}
       variants={fadeUp}
       whileHover={{ y: -6, scale: 1.01 }}
       transition={{ duration: 0.35 }}
-      className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+      onClick={() => onOpen(album)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) {
+          return;
+        }
+
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(album);
+        }
+      }}
+      className="group relative min-w-0 cursor-pointer overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
     >
       <div className="relative h-44 overflow-hidden">
         {album.image ? (
@@ -206,7 +225,10 @@ function AlbumCard({
           <button
             type="button"
             aria-label={`Open menu for ${album.name}`}
-            onClick={() => onToggleMenu(album.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleMenu(album.id);
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-lg leading-none text-slate-500 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:text-emerald-700"
           >
             ⋯
@@ -221,11 +243,16 @@ function AlbumCard({
                 transition={{ duration: 0.18 }}
                 className="absolute right-0 top-11 z-20 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
               >
-                {["Rename", "Archive", "Delete"].map((action) => (
+                {["Edit", "Archive", "Delete"].map((action) => (
                   <button
                     key={action}
                     type="button"
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (action === "Edit") {
+                        onEdit(album);
+                      }
+
                       if (action === "Delete") {
                         onDelete(album);
                       }
@@ -278,6 +305,7 @@ function AlbumCard({
 }
 
 export default function AlbumsPage() {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -285,11 +313,17 @@ export default function AlbumsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [createErrorMessage, setCreateErrorMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [albumToEdit, setAlbumToEdit] = useState<Album | null>(null);
   const [albumToDelete, setAlbumToDelete] = useState<Album | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
   const [isActionTransitioning, setIsActionTransitioning] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [selectedCoverImage, setSelectedCoverImage] = useState<File | null>(
+    null,
+  );
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
+  const coverPreviewUrlRef = useRef("");
 
   const featuredAlbum = albums[0] ?? null;
   const stats = useMemo(() => {
@@ -322,6 +356,24 @@ export default function AlbumsPage() {
       },
     ];
   }, [albums]);
+
+  const clearSelectedCoverImage = () => {
+    if (coverPreviewUrlRef.current) {
+      URL.revokeObjectURL(coverPreviewUrlRef.current);
+      coverPreviewUrlRef.current = "";
+    }
+
+    setSelectedCoverImage(null);
+    setCoverPreviewUrl("");
+  };
+
+  useEffect(() => {
+    return () => {
+      if (coverPreviewUrlRef.current) {
+        URL.revokeObjectURL(coverPreviewUrlRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -381,14 +433,95 @@ export default function AlbumsPage() {
   const closeCreateModal = () => {
     if (!isCreating) {
       setCreateErrorMessage("");
+      setAlbumToEdit(null);
+      clearSelectedCoverImage();
       setIsModalOpen(false);
     }
+  };
+
+  const openCreateModal = () => {
+    setCreateErrorMessage("");
+    setAlbumToEdit(null);
+    clearSelectedCoverImage();
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (album: Album) => {
+    setOpenMenuId(null);
+    setCreateErrorMessage("");
+    setAlbumToEdit(album);
+    clearSelectedCoverImage();
+    setIsModalOpen(true);
+  };
+
+  const handleCoverImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      clearSelectedCoverImage();
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setCreateErrorMessage("Please choose an image file.");
+      clearSelectedCoverImage();
+      return;
+    }
+
+    if (coverPreviewUrlRef.current) {
+      URL.revokeObjectURL(coverPreviewUrlRef.current);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    coverPreviewUrlRef.current = previewUrl;
+    setSelectedCoverImage(file);
+    setCoverPreviewUrl(previewUrl);
+    setCreateErrorMessage("");
+  };
+
+  const uploadAlbumCover = async (
+    albumId: string,
+    token: string,
+    coverImage: File,
+  ) => {
+    const coverFormData = new FormData();
+    coverFormData.append("cover", coverImage);
+
+    const response = await fetch(
+      `http://localhost:5000/api/albums/${encodeURIComponent(albumId)}/cover`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: coverFormData,
+      },
+    );
+
+    const data = (await response.json().catch(() => null)) as
+      | CreateAlbumResponse
+      | { message?: string }
+      | null;
+
+    if (!response.ok) {
+      throw new Error(data?.message || "Failed to upload album cover.");
+    }
+
+    if (!data || !("album" in data)) {
+      throw new Error("Album cover response was empty.");
+    }
+
+    return data.album;
   };
 
   const openDeleteConfirmation = (album: Album) => {
     setOpenMenuId(null);
     setDeleteErrorMessage("");
     setAlbumToDelete(album);
+  };
+
+  const openAlbumDetail = (album: Album) => {
+    navigate(`/dashboard/albums/${encodeURIComponent(album.id)}`);
   };
 
   const closeDeleteConfirmation = () => {
@@ -398,9 +531,10 @@ export default function AlbumsPage() {
     }
   };
 
-  const handleCreateAlbum = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveAlbum = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const isEditing = Boolean(albumToEdit);
     const form = event.currentTarget;
     const formData = new FormData(form);
     const name = String(formData.get("name") ?? "").trim();
@@ -421,10 +555,18 @@ export default function AlbumsPage() {
     }
 
     setIsCreating(true);
+    const transitionStartedAt = startActionTransition();
+    setIsActionTransitioning(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/albums", {
-        method: "POST",
+      const response = await fetch(
+        albumToEdit
+          ? `http://localhost:5000/api/albums/${encodeURIComponent(
+              albumToEdit.id,
+            )}`
+          : "http://localhost:5000/api/albums",
+        {
+        method: albumToEdit ? "PATCH" : "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -433,7 +575,8 @@ export default function AlbumsPage() {
           name,
           description: description || undefined,
         }),
-      });
+        },
+      );
 
       const data = (await response.json().catch(() => null)) as
         | CreateAlbumResponse
@@ -441,19 +584,51 @@ export default function AlbumsPage() {
         | null;
 
       if (!response.ok) {
-        throw new Error(data?.message || "Failed to create album.");
+        throw new Error(
+          data?.message ||
+            (isEditing ? "Failed to update album." : "Failed to create album."),
+        );
       }
 
       if (data && "album" in data) {
-        setAlbums((currentAlbums) => [mapApiAlbum(data.album), ...currentAlbums]);
+        const finalAlbum = selectedCoverImage
+          ? await uploadAlbumCover(data.album.id, token, selectedCoverImage)
+          : data.album;
+        const savedAlbum = mapApiAlbum(finalAlbum);
+
+        setAlbums((currentAlbums) =>
+          isEditing
+            ? currentAlbums.map((album) =>
+                album.id === savedAlbum.id ? savedAlbum : album,
+              )
+            : [savedAlbum, ...currentAlbums],
+        );
       }
 
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
       form.reset();
       setCreateErrorMessage("");
+      setAlbumToEdit(null);
+      clearSelectedCoverImage();
       setIsModalOpen(false);
+      setFeedback({
+        icon: "A",
+        title: isEditing ? "Album Updated" : "Album Created",
+        message: isEditing
+          ? "Your album has been updated."
+          : "Your album has been created.",
+        type: "success",
+      });
     } catch (error) {
+      await waitForActionTransition(transitionStartedAt);
+      setIsActionTransitioning(false);
       setCreateErrorMessage(
-        error instanceof Error ? error.message : "Failed to create album.",
+        error instanceof Error
+          ? error.message
+          : isEditing
+            ? "Failed to update album."
+            : "Failed to create album.",
       );
     } finally {
       setIsCreating(false);
@@ -563,7 +738,7 @@ export default function AlbumsPage() {
 
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
+          onClick={openCreateModal}
           className="inline-flex w-full items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25 sm:w-auto"
         >
           + New Album
@@ -601,10 +776,19 @@ export default function AlbumsPage() {
 
       {featuredAlbum ? (
       <motion.section
+        role="button"
+        tabIndex={0}
         variants={fadeUp}
         whileHover={{ y: -4 }}
         transition={{ duration: 0.35 }}
-        className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+        onClick={() => openAlbumDetail(featuredAlbum)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openAlbumDetail(featuredAlbum);
+          }
+        }}
+        className="group cursor-pointer overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
       >
         <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="relative min-h-[18rem] overflow-hidden sm:min-h-[22rem] lg:min-h-full">
@@ -720,6 +904,8 @@ export default function AlbumsPage() {
             onToggleMenu={(id) =>
               setOpenMenuId((current) => (current === id ? null : id))
             }
+            onOpen={openAlbumDetail}
+            onEdit={openEditModal}
             onDelete={openDeleteConfirmation}
           />
         ))}
@@ -746,22 +932,25 @@ export default function AlbumsPage() {
               className="my-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
             >
               <form
-                onSubmit={handleCreateAlbum}
+                key={albumToEdit?.id ?? "new-album"}
+                onSubmit={handleSaveAlbum}
                 className="max-h-[90vh] overflow-y-auto p-5 sm:p-7"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">
-                      Create Collection
+                      {albumToEdit ? "Edit Collection" : "Create Collection"}
                     </p>
                     <h2
                       id="new-album-title"
                       className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl"
                     >
-                      New Album
+                      {albumToEdit ? "Edit Album" : "New Album"}
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Organize a new memory collection.
+                      {albumToEdit
+                        ? "Update this memory collection."
+                        : "Organize a new memory collection."}
                     </p>
                   </div>
 
@@ -777,17 +966,40 @@ export default function AlbumsPage() {
 
                 <div className="mt-7 grid gap-5 md:grid-cols-[0.85fr_1.15fr]">
                   <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5">
-                    <div className="flex min-h-56 flex-col items-center justify-center rounded-[1.25rem] border border-white bg-white/80 p-5 text-center">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-700">
-                        ▣
-                      </div>
-                      <p className="mt-4 text-sm font-semibold text-slate-950">
-                        Album cover
-                      </p>
-                      <p className="mt-2 max-w-48 text-xs leading-5 text-slate-500">
-                        Placeholder only. Real uploads will be added later.
-                      </p>
-                    </div>
+                    <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border border-white bg-white/80 p-5 text-center transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-emerald-950/5">
+                      <input
+                        name="cover"
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        disabled={isCreating}
+                        onChange={handleCoverImageChange}
+                      />
+                      {coverPreviewUrl || albumToEdit?.image ? (
+                        <div className="w-full">
+                          <img
+                            src={coverPreviewUrl || albumToEdit?.image || ""}
+                            alt=""
+                            className="h-44 w-full rounded-[1.1rem] object-cover shadow-lg shadow-slate-950/10"
+                          />
+                          <p className="mt-4 truncate text-sm font-semibold text-slate-950">
+                            {selectedCoverImage?.name || "Album cover"}
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-700">
+                            A
+                          </div>
+                          <p className="mt-4 text-sm font-semibold text-slate-950">
+                            Album cover
+                          </p>
+                          <p className="mt-2 max-w-48 text-xs leading-5 text-slate-500">
+                            Choose an image from your device.
+                          </p>
+                        </>
+                      )}
+                    </label>
                   </div>
 
                   <div className="grid gap-4">
@@ -796,6 +1008,7 @@ export default function AlbumsPage() {
                         name="name"
                         type="text"
                         placeholder="Family, Travel, Coding..."
+                        defaultValue={albumToEdit?.name ?? ""}
                         disabled={isCreating}
                         className={inputClasses()}
                       />
@@ -806,13 +1019,18 @@ export default function AlbumsPage() {
                         name="description"
                         placeholder="Describe this collection..."
                         rows={5}
+                        defaultValue={
+                          albumToEdit?.description === "No description yet."
+                            ? ""
+                            : albumToEdit?.description ?? ""
+                        }
                         disabled={isCreating}
                         className={`${inputClasses()} resize-none`}
                       />
                     </FormField>
 
                     <FormField label="Privacy">
-                      <select className={inputClasses()}>
+                      <select disabled={isCreating} className={inputClasses()}>
                         <option>Private</option>
                         <option>Shared Later</option>
                       </select>
@@ -840,7 +1058,13 @@ export default function AlbumsPage() {
                     disabled={isCreating}
                     className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25"
                   >
-                    {isCreating ? "Creating..." : "Create Album"}
+                    {isCreating
+                      ? albumToEdit
+                        ? "Updating..."
+                        : "Creating..."
+                      : albumToEdit
+                        ? "Update Album"
+                        : "Create Album"}
                   </button>
                 </div>
               </form>
@@ -926,5 +1150,4 @@ export default function AlbumsPage() {
     </motion.div>
   );
 }
-
 

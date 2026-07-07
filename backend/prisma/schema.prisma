@@ -79,6 +79,7 @@ model Album {
   name        String
   description String?
   coverUrl    String?
+  coverPublicId String?
 
   memories Memory[]
 

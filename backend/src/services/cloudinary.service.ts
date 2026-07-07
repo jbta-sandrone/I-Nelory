@@ -25,15 +25,16 @@ const configureCloudinary = () => {
   configured = true;
 };
 
-export const uploadMemoryImage = async (
-  file: Express.Multer.File
+const uploadImage = async (
+  file: Express.Multer.File,
+  folder: string
 ): Promise<UploadApiResponse> => {
   configureCloudinary();
 
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: "i-nelory/memories",
+        folder,
         resource_type: "image",
       },
       (error, result) => {
@@ -50,7 +51,7 @@ export const uploadMemoryImage = async (
   });
 };
 
-export const deleteMemoryImage = async (publicId: string) => {
+const deleteImage = async (publicId: string) => {
   configureCloudinary();
 
   const result = (await cloudinary.uploader.destroy(publicId, {
@@ -66,4 +67,20 @@ export const deleteMemoryImage = async (publicId: string) => {
   }
 
   return result;
+};
+
+export const uploadMemoryImage = async (file: Express.Multer.File) => {
+  return uploadImage(file, "i-nelory/memories");
+};
+
+export const deleteMemoryImage = async (publicId: string) => {
+  return deleteImage(publicId);
+};
+
+export const uploadAlbumCover = async (file: Express.Multer.File) => {
+  return uploadImage(file, "i-nelory/albums");
+};
+
+export const deleteAlbumCover = async (publicId: string) => {
+  return deleteImage(publicId);
 };
