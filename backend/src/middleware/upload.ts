@@ -38,6 +38,21 @@ const uploadAlbumCover = multer({
   },
 }).single("cover");
 
+const uploadAvatar = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!imageMimeTypes.has(file.mimetype)) {
+      callback(new Error("Only image uploads are supported for now"));
+      return;
+    }
+
+    callback(null, true);
+  },
+}).single("avatar");
+
 export const uploadMemoryImageMiddleware = (
   req: Request,
   res: Response,
@@ -61,6 +76,23 @@ export const uploadAlbumCoverMiddleware = (
   next: NextFunction
 ) => {
   uploadAlbumCover(req, res, (error) => {
+    if (error) {
+      return res.status(400).json({
+        message:
+          error instanceof Error ? error.message : "Failed to upload image",
+      });
+    }
+
+    return next();
+  });
+};
+
+export const uploadAvatarMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  uploadAvatar(req, res, (error) => {
     if (error) {
       return res.status(400).json({
         message:

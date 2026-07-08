@@ -34,6 +34,10 @@ export const registerUser = async (data: RegisterRequest) => {
       id: true,
       username: true,
       email: true,
+      bio: true,
+      location: true,
+      avatarUrl: true,
+      avatarPublicId: true,
       createdAt: true,
     },
   });
@@ -68,7 +72,11 @@ export const loginUser = async (data: LoginRequest) => {
     user: {
       id: user.id,
       username: user.username,
+      bio: user.bio,
+      location: user.location,
       email: user.email,
+      avatarUrl: user.avatarUrl ?? null,
+      avatarPublicId: user.avatarPublicId ?? null,
       createdAt: user.createdAt,
     },
   };

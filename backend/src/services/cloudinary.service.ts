@@ -84,3 +84,11 @@ export const uploadAlbumCover = async (file: Express.Multer.File) => {
 export const deleteAlbumCover = async (publicId: string) => {
   return deleteImage(publicId);
 };
+
+export const uploadAvatar = async (file: Express.Multer.File) => {
+  return uploadImage(file, "i-nelory/avatars");
+};
+
+export const deleteAvatar = async (publicId: string) => {
+  return deleteImage(publicId);
+};

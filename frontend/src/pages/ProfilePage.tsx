@@ -1,17 +1,66 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { getStoredAuthToken } from "../services/auth";
+import FeedbackDialog from "../components/FeedbackDialog";
+import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
+import { waitForActionTransition } from "../utils/actionTransition";
 
-const user = {
-  fullName: "Jonel Bryan Ablog",
-  username: "@jonelmemory",
-  email: "jonel@example.com",
-  bio: "Preserving ordinary days, family stories, and the small moments that become meaningful later.",
-  joinedDate: "Joined March 2026",
-  location: "Philippines",
-  completion: "86% complete",
-  avatarInitials: "JA",
+type ApiMemory = {
+  id: string;
+  title: string;
+  description: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  memoryDate: string | null;
+  location: string | null;
+  isFavorite: boolean;
+  isArchived: boolean;
+  createdAt: string;
 };
+
+type ApiAlbum = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
+type StatsType = {
+  totalMemories: number;
+  albums: number;
+  favorites: number;
+  archived: number;
+};
+
+function generateAvatarInitials(fullName: string, email: string): string {
+  if (!fullName.trim()) {
+    return email.substring(0, 2).toUpperCase();
+  }
+
+  const names = fullName.trim().split(/\s+/);
+  if (names.length >= 2) {
+    return (names[0][0] + names[names.length - 1][0]).toUpperCase();
+  }
+  return fullName.substring(0, 2).toUpperCase();
+}
+
+function formatJoinedDate(createdAt?: string): string {
+  if (!createdAt) {
+    return "Joined recently";
+  }
+
+  try {
+    const date = new Date(createdAt);
+    return new Intl.DateTimeFormat("en", {
+      month: "long",
+      year: "numeric",
+    }).format(date);
+  } catch {
+    return "Joined recently";
+  }
+}
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -40,68 +89,6 @@ const staggerContainer: Variants = {
   },
 };
 
-const stats = [
-  { label: "Total Memories", value: "248", icon: "◇" },
-  { label: "Albums", value: "18", icon: "▣" },
-  { label: "Favorites", value: "31", icon: "♡" },
-  { label: "Archived", value: "18", icon: "◫" },
-  { label: "Stories", value: "46", icon: "✎" },
-  { label: "Tags Used", value: "72", icon: "#" },
-];
-
-const bioDetails = [
-  {
-    label: "Short bio",
-    value: user.bio,
-  },
-  {
-    label: "Favorite quote",
-    value: "Moments pass. Memories stay.",
-  },
-  {
-    label: "Memory theme preference",
-    value: "Calm emerald, soft light, and clean album layouts.",
-  },
-  {
-    label: "Most active album",
-    value: "Travel",
-  },
-];
-
-const activities = [
-  { title: "Added a new memory", detail: "Beach Morning", time: "Today" },
-  { title: "Updated profile photo", detail: "Profile overview", time: "Yesterday" },
-  { title: "Created Travel album", detail: "58 memories collected", time: "2 days ago" },
-  { title: "Favorited Family Morning", detail: "Saved close", time: "4 days ago" },
-];
-
-const highlights = [
-  {
-    title: "Most Loved Memory",
-    value: "Family Morning",
-    detail: "A quiet breakfast memory you revisit often.",
-    icon: "♡",
-  },
-  {
-    title: "Favorite Album",
-    value: "Travel",
-    detail: "58 moments from weekends, roads, and sunsets.",
-    icon: "▣",
-  },
-  {
-    title: "Most Used Tag",
-    value: "#family",
-    detail: "Used across 42 memories.",
-    icon: "#",
-  },
-  {
-    title: "Memory Streak",
-    value: "14 days",
-    detail: "A gentle rhythm of preserving moments.",
-    icon: "◷",
-  },
-];
-
 function inputClasses() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/15";
 }
@@ -122,7 +109,399 @@ function FormField({
 }
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
+  const { user: authUser, setUser } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [stats, setStats] = useState<StatsType>({
+    totalMemories: 0,
+    albums: 0,
+    favorites: 0,
+    archived: 0,
+  });
+  const [allMemories, setAllMemories] = useState<ApiMemory[]>([]);
+  const [recentMemories, setRecentMemories] = useState<ApiMemory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingOverlayOpen, setIsLoadingOverlayOpen] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    title: string;
+    message?: string;
+  } | null>(null);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [actionStartTime, setActionStartTime] = useState<number | null>(null);
+  // avatar upload state
+  const [profileForm, setProfileForm] = useState({
+    bio: "",
+    location: "",
+  });
+
+  // User data with fallbacks
+  const fullName = authUser?.username || "Memory Keeper";
+  const email = authUser?.email || "user@example.com";
+  const username = `@${(authUser?.username || email.split("@")[0]).toLowerCase()}`;
+  const bio = authUser?.bio || "Preserving meaningful memories in I-Nelory.";
+  const joinedDate = `Joined ${formatJoinedDate(authUser?.createdAt)}`;
+  const location = authUser?.location || "Not set";
+  const avatarInitials = generateAvatarInitials(fullName, email);
+
+  const bioDetails = [
+    {
+      label: "Short bio",
+      value: bio,
+    },
+    {
+      label: "Email",
+      value: email,
+    },
+    {
+      label: "Joined date",
+      value: joinedDate,
+    },
+    {
+      label: "Location",
+      value: location,
+    },
+  ];
+
+  // Format time for recent memories
+  const formatTimeAgo = useCallback((dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+
+      return new Intl.DateTimeFormat("en", {
+        month: "short",
+        day: "numeric",
+      }).format(date);
+    } catch {
+      return "Recently";
+    }
+  }, []);
+
+  // Fetch stats and recent memories
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchData() {
+      setIsLoading(true);
+
+      try {
+        const token = getStoredAuthToken();
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Fetch all memories
+        const memoriesResponse = await fetch(
+          "http://localhost:5000/api/memories",
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          },
+        );
+
+        if (!memoriesResponse.ok) {
+          throw new Error("Failed to fetch memories");
+        }
+
+        const memoriesData = (await memoriesResponse.json()) as {
+          memories: ApiMemory[];
+        };
+        const normalMemories = memoriesData.memories || [];
+        setAllMemories(normalMemories);
+
+        // Fetch archived memories
+        const archivedResponse = await fetch(
+          "http://localhost:5000/api/memories/archive",
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          },
+        );
+
+        const archivedData = archivedResponse.ok
+          ? ((await archivedResponse.json()) as { memories: ApiMemory[] })
+          : { memories: [] };
+        const archived = archivedData.memories || [];
+
+        // Fetch albums
+        const albumsResponse = await fetch("http://localhost:5000/api/albums", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+
+        const albumsData = albumsResponse.ok
+          ? ((await albumsResponse.json()) as { albums: ApiAlbum[] })
+          : { albums: [] };
+        const albums = albumsData.albums || [];
+
+        // Calculate stats
+        const favorites = normalMemories.filter((m) => m.isFavorite).length;
+
+        setStats({
+          totalMemories: normalMemories.length,
+          albums: albums.length,
+          favorites,
+          archived: archived.length,
+        });
+
+        // Set recent memories (latest 4 by createdAt)
+        const sorted = [...normalMemories].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+        setRecentMemories(sorted.slice(0, 4));
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        console.error("Error fetching profile data:", error);
+        // Keep default state on error
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchData();
+
+    return () => controller.abort();
+  }, []);
+
+  // Sync form when modal opens or user data changes
+  useEffect(() => {
+    if (isModalOpen) {
+      setProfileForm({
+        bio: authUser?.bio || "Preserving meaningful memories in I-Nelory.",
+        location: authUser?.location || "Not set",
+      });
+    }
+  }, [isModalOpen, authUser?.bio, authUser?.location]);
+
+  const handleSaveChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setIsModalOpen(false);
+    setIsLoadingOverlayOpen(true);
+    const startedAt = Date.now();
+    setActionStartTime(startedAt);
+
+    try {
+      const token = getStoredAuthToken();
+      if (!token) {
+        throw new Error("Missing authentication token");
+      }
+
+      // Step A: update bio/location
+      const profileRes = await fetch("http://localhost:5000/api/auth/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          bio: profileForm.bio,
+          location: profileForm.location,
+        }),
+      });
+
+      if (!profileRes.ok) {
+        const data = (await profileRes.json()) as { message?: string };
+        throw new Error(data.message || "Failed to update profile");
+      }
+
+      const profileData = (await profileRes.json()) as { user: typeof authUser };
+      let latestUser = profileData.user;
+
+      // Step B: if avatar selected, upload it and prefer its returned user
+      if (selectedAvatarFile) {
+        const formData = new FormData();
+        formData.append("avatar", selectedAvatarFile);
+
+        const avatarRes = await fetch(
+          "http://localhost:5000/api/auth/profile/avatar",
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          },
+        );
+
+        if (!avatarRes.ok) {
+          const data = await avatarRes.json().catch(() => null);
+          throw new Error((data && (data.message || data.error)) || "Failed to upload avatar");
+        }
+
+        const avatarData = (await avatarRes.json()) as { user: typeof authUser };
+        if (avatarData.user) latestUser = avatarData.user;
+      }
+
+      // Use the latest user and update context
+      if (latestUser) {
+        setUser(latestUser);
+      }
+
+      // Cleanup preview and selected file
+      if (avatarPreview) {
+        URL.revokeObjectURL(avatarPreview);
+        setAvatarPreview(null);
+      }
+      setSelectedAvatarFile(null);
+
+      if (actionStartTime !== null) {
+        await waitForActionTransition(actionStartTime, 900);
+      }
+
+      setIsLoadingOverlayOpen(false);
+      setFeedback({
+        title: "Profile updated",
+        message: "Your profile details were saved successfully.",
+      });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (error) {
+      setIsLoadingOverlayOpen(false);
+      setFeedback({
+        title: "Could not update profile",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
+      setTimeout(() => setFeedback(null), 4000);
+    } finally {
+      setIsSaving(false);
+      setActionStartTime(null);
+    }
+  };
+
+  // Calculate memory insights
+  const getEarliestMemory = (): { title: string; date: string } => {
+    if (allMemories.length === 0) {
+      return { title: "No memories yet", date: "" };
+    }
+
+    let earliest = allMemories[0];
+    for (const memory of allMemories) {
+      if (memory.memoryDate) {
+        if (
+          !earliest.memoryDate ||
+          new Date(memory.memoryDate) < new Date(earliest.memoryDate)
+        ) {
+          earliest = memory;
+        }
+      }
+    }
+
+    if (!earliest.memoryDate && !earliest.createdAt) {
+      return { title: earliest.title || "First memory", date: "" };
+    }
+
+    const date = new Date(earliest.memoryDate || earliest.createdAt);
+    const formatted = new Intl.DateTimeFormat("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+
+    return {
+      title: earliest.title || "First memory",
+      date: formatted,
+    };
+  };
+
+  const getLatestMemory = (): string => {
+    if (allMemories.length === 0) return "No memories yet";
+    const latest = allMemories.reduce((prev, current) =>
+      new Date(current.createdAt) > new Date(prev.createdAt) ? current : prev,
+    );
+    return latest.title || "Latest memory";
+  };
+
+  const getFavoriteRate = (): string => {
+    if (stats.totalMemories === 0) return "0%";
+    const rate = Math.round((stats.favorites / stats.totalMemories) * 100);
+    return `${rate}%`;
+  };
+
+  const getArchiveBalance = (): string => {
+    const total = stats.totalMemories + stats.archived;
+    if (total === 0) return "0%";
+    const rate = Math.round((stats.archived / total) * 100);
+    return `${rate}%`;
+  };
+
+  const insights = [
+    {
+      title: "Earliest Memory",
+      value: getEarliestMemory().title,
+      detail: "Your first preserved moment in I-Nelory.",
+      icon: "⏰",
+    },
+    {
+      title: "Latest Memory",
+      value: getLatestMemory(),
+      detail: "Your newest added memory.",
+      icon: "✨",
+    },
+    {
+      title: "Favorite Rate",
+      value: getFavoriteRate(),
+      detail: "Of your memories are marked as favorites.",
+      icon: "♡",
+    },
+    {
+      title: "Archive Balance",
+      value: getArchiveBalance(),
+      detail: "Of your memories are resting in Archive.",
+      icon: "◫",
+    },
+  ];
+
+  const statsList = [
+    {
+      label: "Total Memories",
+      value: stats.totalMemories.toString(),
+      icon: "◇",
+      route: "/dashboard/memories",
+    },
+    {
+      label: "Albums",
+      value: stats.albums.toString(),
+      icon: "▣",
+      route: "/dashboard/albums",
+    },
+    {
+      label: "Favorites",
+      value: stats.favorites.toString(),
+      icon: "♡",
+      route: "/dashboard/favorites",
+    },
+    {
+      label: "Archived",
+      value: stats.archived.toString(),
+      icon: "◫",
+      route: "/dashboard/archive",
+    },
+    {
+      label: "Stories",
+      value: "Coming soon",
+      icon: "✎",
+      route: null,
+    },
+    { label: "Tags Used", value: "Coming soon", icon: "#", route: null },
+  ];
 
   return (
     <motion.div
@@ -131,6 +510,41 @@ export default function ProfilePage() {
       animate="visible"
       variants={staggerContainer}
     >
+      {/* Loading overlay */}
+      <ActionTransitionOverlay
+        isOpen={isLoadingOverlayOpen}
+        title="Updating your profile..."
+        subtitle="Saving your latest changes."
+      />
+
+      {/* Feedback Dialog */}
+      <AnimatePresence>
+        {feedback && (
+          <FeedbackDialog
+            isOpen={Boolean(feedback)}
+            title={feedback.title}
+            message={feedback.message}
+            icon={
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            }
+            onDismiss={() => setFeedback(null)}
+            duration={4000}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Page Header */}
       <motion.section
         variants={fadeUp}
@@ -164,35 +578,45 @@ export default function ProfilePage() {
       >
         <div className="absolute -right-20 -top-24 h-60 w-60 rounded-full bg-emerald-100/80 blur-3xl" />
         <div className="relative grid gap-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-          <div className="flex h-28 w-28 items-center justify-center rounded-[2rem] bg-slate-950 text-3xl font-semibold text-white shadow-xl shadow-slate-950/15">
-            {user.avatarInitials}
+          <div className="flex h-28 w-28 items-center justify-center rounded-[2rem] bg-slate-950 text-3xl font-semibold text-white shadow-xl shadow-slate-950/15 overflow-hidden">
+            {authUser?.avatarUrl ? (
+              <img
+                src={authUser.avatarUrl}
+                alt="Avatar"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-slate-950 text-3xl font-semibold text-white">
+                {avatarInitials}
+              </div>
+            )}
           </div>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                {user.fullName}
+                {fullName}
               </h2>
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                {user.completion}
+                {stats.totalMemories} memories
               </span>
             </div>
             <p className="mt-2 text-sm font-medium text-emerald-700">
-              {user.username}
+              {username}
             </p>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
-              {user.bio}
+              {bio}
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2 text-sm text-slate-500">
               <span className="rounded-full bg-slate-100 px-3 py-1">
-                {user.email}
+                {email}
               </span>
               <span className="rounded-full bg-slate-100 px-3 py-1">
-                {user.joinedDate}
+                {joinedDate}
               </span>
               <span className="rounded-full bg-slate-100 px-3 py-1">
-                {user.location}
+                {location}
               </span>
             </div>
           </div>
@@ -203,7 +627,7 @@ export default function ProfilePage() {
             </p>
             <div className="mt-4 space-y-3">
               <div className="h-2 rounded-full bg-white">
-                <div className="h-2 w-[86%] rounded-full bg-emerald-500" />
+                <div className="h-2 w-[45%] rounded-full bg-emerald-500" />
               </div>
               <p className="text-xs leading-5 text-emerald-800/80">
                 Add cover art and favorite themes later to complete your memory
@@ -219,25 +643,36 @@ export default function ProfilePage() {
         variants={staggerContainer}
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"
       >
-        {stats.map((stat) => (
-          <motion.article
-            key={stat.label}
-            variants={fadeUp}
-            whileHover={{ y: -5, scale: 1.015 }}
-            transition={{ duration: 0.3 }}
-            className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-lg hover:shadow-slate-950/10"
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-lg font-semibold text-emerald-700">
-              {stat.icon}
-            </span>
-            <p className="mt-5 truncate text-2xl font-semibold tracking-tight text-slate-950">
-              {stat.value}
-            </p>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              {stat.label}
-            </p>
-          </motion.article>
-        ))}
+        {statsList.map((stat) => {
+          const isClickable = stat.route !== null;
+          const isComingSoon = !isClickable;
+
+          return (
+            <motion.button
+              key={stat.label}
+              onClick={() => isClickable && navigate(stat.route)}
+              disabled={isComingSoon}
+              variants={fadeUp}
+              whileHover={isClickable ? { y: -5, scale: 1.015 } : {}}
+              transition={{ duration: 0.3 }}
+              className={`min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 text-left ${
+                isClickable
+                  ? "cursor-pointer hover:shadow-lg hover:bg-black/8"
+                  : "cursor-default opacity-60"
+              }`}
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-lg font-semibold text-emerald-700">
+                {stat.icon}
+              </span>
+              <p className="mt-5 truncate text-2xl font-semibold tracking-tight text-slate-950">
+                {stat.value}
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-500">
+                {stat.label}
+              </p>
+            </motion.button>
+          );
+        })}
       </motion.section>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.85fr]">
@@ -273,7 +708,7 @@ export default function ProfilePage() {
           </div>
         </motion.section>
 
-        {/* Recent Profile Activity */}
+        {/* Recent Memories */}
         <motion.section
           variants={fadeUp}
           className="min-w-0 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 sm:p-6"
@@ -282,60 +717,87 @@ export default function ProfilePage() {
             Recent Activity
           </p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-            Profile changes and memory moments.
+            Latest moments in your memory space.
           </h2>
 
           <div className="mt-6 space-y-1">
-            {activities.map((activity, index) => (
-              <motion.div
-                key={activity.title}
-                variants={fadeUp}
-                className="relative flex gap-4 rounded-[1.25rem] p-3 transition duration-300 hover:bg-slate-50"
-              >
-                <div className="flex flex-col items-center">
-                  <span className="mt-1 h-3 w-3 rounded-full bg-emerald-500" />
-                  {index < activities.length - 1 ? (
-                    <span className="mt-2 h-full min-h-8 w-px bg-slate-200" />
-                  ) : null}
-                </div>
-                <div className="min-w-0 pb-3">
-                  <p className="text-sm font-semibold text-slate-950">
-                    {activity.title}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {activity.detail} · {activity.time}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className="h-12 animate-pulse rounded-lg bg-slate-100"
+                  />
+                ))}
+              </div>
+            ) : recentMemories.length > 0 ? (
+              recentMemories.map((memory, index) => (
+                <motion.div
+                  key={memory.id}
+                  variants={fadeUp}
+                  className="relative flex gap-4 rounded-[1.25rem] p-3 transition duration-300 hover:bg-slate-50"
+                >
+                  <div className="flex flex-col items-center">
+                    <span className="mt-1 h-3 w-3 rounded-full bg-emerald-500" />
+                    {index < recentMemories.length - 1 ? (
+                      <span className="mt-2 h-full min-h-8 w-px bg-slate-200" />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 pb-3">
+                    <p className="text-sm font-semibold text-slate-950 truncate">
+                      {memory.title || "Untitled Memory"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500 truncate">
+                      {memory.description || "No description"} ·{" "}
+                      {formatTimeAgo(memory.createdAt)}
+                    </p>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-sm text-slate-500">
+                  No memories yet. Start creating your first memory!
+                </p>
+              </div>
+            )}
           </div>
         </motion.section>
       </div>
 
-      {/* Personal Highlights */}
+      {/* Memory Insights */}
       <motion.section
         variants={staggerContainer}
         className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4"
       >
-        {highlights.map((highlight) => (
+        <motion.div variants={fadeUp} className="sm:col-span-2 xl:col-span-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">
+            Memory Insights
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+            Patterns from your memory space.
+          </h2>
+        </motion.div>
+
+        {insights.map((insight) => (
           <motion.article
-            key={highlight.title}
+            key={insight.title}
             variants={fadeUp}
             whileHover={{ y: -6, scale: 1.01 }}
             transition={{ duration: 0.35 }}
             className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-lg font-semibold text-emerald-700">
-              {highlight.icon}
+              {insight.icon}
             </span>
             <p className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-              {highlight.title}
+              {insight.title}
             </p>
             <h3 className="mt-2 text-xl font-semibold text-slate-950">
-              {highlight.value}
+              {insight.value}
             </h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {highlight.detail}
+              {insight.detail}
             </p>
           </motion.article>
         ))}
@@ -361,7 +823,7 @@ export default function ProfilePage() {
               className="my-auto w-full max-w-3xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
             >
               <form
-                onSubmit={(event) => event.preventDefault()}
+                onSubmit={handleSaveChanges}
                 className="max-h-[90vh] overflow-y-auto p-5 sm:p-7"
               >
                 <div className="flex items-start justify-between gap-4">
@@ -376,7 +838,7 @@ export default function ProfilePage() {
                       Edit Profile
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Update the profile preview. Saving will be connected later.
+                      Update your bio and location details.
                     </p>
                   </div>
 
@@ -393,15 +855,88 @@ export default function ProfilePage() {
                 <div className="mt-7 grid gap-5 md:grid-cols-[0.8fr_1.2fr]">
                   <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5">
                     <div className="flex min-h-56 flex-col items-center justify-center rounded-[1.25rem] border border-white bg-white/80 p-5 text-center">
-                      <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-slate-950 text-2xl font-semibold text-white shadow-lg shadow-slate-950/15">
-                        {user.avatarInitials}
+                      <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] overflow-hidden bg-slate-950 text-2xl font-semibold text-white shadow-lg shadow-slate-950/15">
+                        {avatarPreview ? (
+                          <img
+                            src={avatarPreview}
+                            alt="Preview"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : authUser?.avatarUrl ? (
+                          <img
+                            src={authUser.avatarUrl}
+                            alt="Avatar"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-slate-950 text-2xl font-semibold text-white">
+                            {avatarInitials}
+                          </div>
+                        )}
                       </div>
                       <p className="mt-4 text-sm font-semibold text-slate-950">
                         Avatar upload
                       </p>
-                      <p className="mt-2 max-w-48 text-xs leading-5 text-slate-500">
-                        Placeholder only. Real uploads will be added later.
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        Upload a new avatar image (max 5MB). Accepted formats:
                       </p>
+                      
+
+                      <div className="mt-4 flex w-full flex-col items-center gap-2 text-slate-500">
+                        <input
+                          id="avatar-upload-input"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+
+                            if (!file) {
+                              setSelectedAvatarFile(null);
+                              if (avatarPreview) {
+                                URL.revokeObjectURL(avatarPreview);
+                                setAvatarPreview(null);
+                              }
+                              return;
+                            }
+
+                            // Basic client-side validation
+                            const maxSize = 5 * 1024 * 1024;
+                            if (!file.type.startsWith("image/")) {
+                              setFeedback({
+                                title: "Invalid file",
+                                message: "Please select an image file.",
+                              });
+                              setTimeout(() => setFeedback(null), 3000);
+                              return;
+                            }
+
+                            if (file.size > maxSize) {
+                              setFeedback({
+                                title: "File too large",
+                                message: "Image must be 5MB or smaller.",
+                              });
+                              setTimeout(() => setFeedback(null), 3000);
+                              return;
+                            }
+
+                            setSelectedAvatarFile(file);
+                            const url = URL.createObjectURL(file);
+                            if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+                            setAvatarPreview(url);
+                          }}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="avatar-upload-input"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm shadow-slate-950/5 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/15"
+                        >
+                          <span className="text-lg">📷</span>
+                          <span className="truncate">
+                            {selectedAvatarFile?.name ?? "Upload Avatar"}
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -410,16 +945,18 @@ export default function ProfilePage() {
                       <FormField label="Full name">
                         <input
                           type="text"
-                          defaultValue={user.fullName}
+                          defaultValue={fullName}
                           className={inputClasses()}
+                          disabled
                         />
                       </FormField>
 
                       <FormField label="Username">
                         <input
                           type="text"
-                          defaultValue={user.username}
+                          defaultValue={username}
                           className={inputClasses()}
+                          disabled
                         />
                       </FormField>
                     </div>
@@ -427,24 +964,39 @@ export default function ProfilePage() {
                     <FormField label="Email">
                       <input
                         type="email"
-                        defaultValue={user.email}
+                        defaultValue={email}
                         className={inputClasses()}
+                        disabled
                       />
                     </FormField>
 
                     <FormField label="Bio">
                       <textarea
                         rows={4}
-                        defaultValue={user.bio}
+                        value={profileForm.bio}
+                        onChange={(e) =>
+                          setProfileForm({
+                            ...profileForm,
+                            bio: e.target.value,
+                          })
+                        }
                         className={`${inputClasses()} resize-none`}
+                        placeholder="Share something about your memory journey..."
                       />
                     </FormField>
 
                     <FormField label="Location">
                       <input
                         type="text"
-                        defaultValue={user.location}
+                        value={profileForm.location}
+                        onChange={(e) =>
+                          setProfileForm({
+                            ...profileForm,
+                            location: e.target.value,
+                          })
+                        }
                         className={inputClasses()}
+                        placeholder="Where are you from?"
                       />
                     </FormField>
                   </div>
@@ -454,15 +1006,17 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5"
+                    disabled={isSaving}
+                    className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25"
+                    disabled={isSaving}
+                    className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Save Changes
+                    {isSaving ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>

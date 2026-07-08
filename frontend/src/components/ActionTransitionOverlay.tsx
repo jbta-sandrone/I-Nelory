@@ -5,11 +5,15 @@ import { defaultActionMessages } from "../utils/actionTransition";
 type ActionTransitionOverlayProps = {
   isOpen: boolean;
   messages?: string[];
+  title?: string;
+  subtitle?: string;
 };
 
 export default function ActionTransitionOverlay({
   isOpen,
   messages = defaultActionMessages,
+  title,
+  subtitle,
 }: ActionTransitionOverlayProps) {
   const [messageIndex, setMessageIndex] = useState(0);
 
@@ -107,16 +111,21 @@ export default function ActionTransitionOverlay({
             </p>
             <AnimatePresence mode="wait">
               <motion.h2
-                key={messages[messageIndex]}
+                key={title ?? messages[messageIndex]}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
                 className="mt-3 text-xl font-semibold tracking-tight text-slate-950"
               >
-                {messages[messageIndex]}
+                {title ?? messages[messageIndex]}
               </motion.h2>
             </AnimatePresence>
+            {subtitle ? (
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {subtitle}
+              </p>
+            ) : null}
           </motion.div>
         </motion.div>
       ) : null}
