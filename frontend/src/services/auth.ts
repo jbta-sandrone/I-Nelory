@@ -7,6 +7,7 @@ export type AuthUser = {
   username: string;
   fullName?: string | null;
   email: string;
+  emailVerified?: boolean;
   avatarUrl?: string | null;
   avatarPublicId?: string | null;
   bio?: string | null;
@@ -146,6 +147,17 @@ export async function loginUser(payload: LoginPayload) {
   });
 
   return parseJsonResponse<LoginResponse>(response, "Login failed");
+}
+
+export async function verifyEmail(token: string) {
+  const response = await fetch(
+    `${AUTH_API_BASE_URL}/verify-email?token=${encodeURIComponent(token)}`
+  );
+
+  return parseJsonResponse<{ message: string }>(
+    response,
+    "Email verification failed"
+  );
 }
 
 export async function getCurrentUser(token: string) {

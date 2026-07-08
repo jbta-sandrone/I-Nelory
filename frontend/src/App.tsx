@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useParams,
+} from "react-router-dom";
 import { AuthContext } from "./context/AuthContext";
 import {
   clearAuthSession,
@@ -22,11 +28,14 @@ import AISearchPage from "./pages/AISearchPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import NotificationPage from "./pages/NotificationPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import AuthGuard from "./components/AuthGuard";
 
 function App() {
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() =>
-    getStoredAuthUser()
-  );
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    const token = getStoredAuthToken();
+    return token ? getStoredAuthUser() : null;
+  });
   const [isRestoringUser, setIsRestoringUser] = useState(() =>
     Boolean(getStoredAuthToken())
   );
@@ -35,6 +44,11 @@ function App() {
     const token = getStoredAuthToken();
 
     if (!token) {
+      if (authUser) {
+        clearAuthSession();
+        setAuthUser(null);
+      }
+      setIsRestoringUser(false);
       return;
     }
 
@@ -85,7 +99,8 @@ function App() {
             path="/"
             element={<LandingPage onLoginSuccess={setAuthUser} />}
           />
-          <Route path="/dashboard" element={<Dashboard />}>
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>}>
             <Route index element={<HomePage />} />
             <Route path="memories" element={<MemoriesPage />} />
             <Route path="timeline" element={<TimelinePage />} />
@@ -117,7 +132,7 @@ function DashboardHomePlaceholder() {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
+      <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
           Dashboard
         </p>
@@ -138,7 +153,7 @@ function DashboardHomePlaceholder() {
         ].map(([label, value]) => (
           <article
             key={label}
-            className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5"
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5"
           >
             <p className="text-sm text-slate-500">{label}</p>
             <p className="mt-3 text-3xl font-semibold text-slate-950">

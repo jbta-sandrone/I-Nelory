@@ -67,7 +67,15 @@ export const registerUser = async (data: RegisterRequest) => {
     } as any,
   });
 
-  await sendVerificationEmail(user.email, token);
+  try {
+    await sendVerificationEmail(user.email, token);
+  } catch (error) {
+    console.error(
+      "Failed to send verification email to",
+      user.email,
+      error instanceof Error ? error.message : error
+    );
+  }
 
   return {
     message: "Account created. Please check your email to verify your account.",
@@ -106,6 +114,12 @@ export const loginUser = async (data: LoginRequest) => {
 
   if (!isPasswordCorrect) {
     throw new Error("Invalid username or password");
+  }
+
+  if (!user.emailVerified) {
+    throw new Error(
+      "Please verify your email before logging in. Check your inbox for the verification link."
+    );
   }
 
   const token = generateToken(user.id);
