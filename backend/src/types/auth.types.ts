@@ -10,6 +10,7 @@ export interface LoginRequest {
 }
 
 export interface UpdateProfileRequest {
+  fullName?: string;
   bio?: string;
   location?: string;
 }

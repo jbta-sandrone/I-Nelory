@@ -45,6 +45,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       id: true,
       username: true,
       email: true,
+      fullName: true,
       bio: true,
       location: true,
       avatarUrl: true,
@@ -63,13 +64,14 @@ export const updateProfile = async (
   res: Response
 ) => {
   try {
-    const { bio, location } = req.body as UpdateProfileRequest;
+    const { fullName, bio, location } = req.body as UpdateProfileRequest;
 
     const updatedUser = await prisma.user.update({
       where: {
         id: req.userId,
       },
       data: {
+        ...(fullName !== undefined && { fullName }),
         ...(bio !== undefined && { bio }),
         ...(location !== undefined && { location }),
       },
@@ -77,6 +79,7 @@ export const updateProfile = async (
         id: true,
         username: true,
         email: true,
+        fullName: true,
         bio: true,
         location: true,
         avatarUrl: true,
@@ -130,6 +133,7 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
         id: true,
         username: true,
         email: true,
+        fullName: true,
         bio: true,
         location: true,
         avatarUrl: true,

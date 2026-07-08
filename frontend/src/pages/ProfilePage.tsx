@@ -132,12 +132,13 @@ export default function ProfilePage() {
   const [actionStartTime, setActionStartTime] = useState<number | null>(null);
   // avatar upload state
   const [profileForm, setProfileForm] = useState({
+    fullName: "",
     bio: "",
     location: "",
   });
 
   // User data with fallbacks
-  const fullName = authUser?.username || "Memory Keeper";
+  const fullName = authUser?.fullName || authUser?.username || "Memory Keeper";
   const email = authUser?.email || "user@example.com";
   const username = `@${(authUser?.username || email.split("@")[0]).toLowerCase()}`;
   const bio = authUser?.bio || "Preserving meaningful memories in I-Nelory.";
@@ -285,11 +286,12 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isModalOpen) {
       setProfileForm({
+        fullName: authUser?.fullName || "",
         bio: authUser?.bio || "Preserving meaningful memories in I-Nelory.",
         location: authUser?.location || "Not set",
       });
     }
-  }, [isModalOpen, authUser?.bio, authUser?.location]);
+  }, [isModalOpen, authUser?.fullName, authUser?.bio, authUser?.location]);
 
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,6 +315,7 @@ export default function ProfilePage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          fullName: profileForm.fullName,
           bio: profileForm.bio,
           location: profileForm.location,
         }),
@@ -941,34 +944,22 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="grid gap-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    
                       <FormField label="Full name">
                         <input
                           type="text"
-                          defaultValue={fullName}
+                          value={profileForm.fullName}
+                          onChange={(e) =>
+                            setProfileForm({
+                              ...profileForm,
+                              fullName: e.target.value,
+                            })
+                          }
                           className={inputClasses()}
-                          disabled
+                          placeholder="Your full name"
                         />
                       </FormField>
-
-                      <FormField label="Username">
-                        <input
-                          type="text"
-                          defaultValue={username}
-                          className={inputClasses()}
-                          disabled
-                        />
-                      </FormField>
-                    </div>
-
-                    <FormField label="Email">
-                      <input
-                        type="email"
-                        defaultValue={email}
-                        className={inputClasses()}
-                        disabled
-                      />
-                    </FormField>
+                    
 
                     <FormField label="Bio">
                       <textarea

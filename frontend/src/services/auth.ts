@@ -5,6 +5,7 @@ const AUTH_USER_STORAGE_KEY = "i-nelory.auth.user";
 export type AuthUser = {
   id: number | string;
   username: string;
+  fullName?: string | null;
   email: string;
   avatarUrl?: string | null;
   avatarPublicId?: string | null;

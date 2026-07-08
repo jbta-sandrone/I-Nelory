@@ -33,6 +33,7 @@ export const registerUser = async (data: RegisterRequest) => {
     select: {
       id: true,
       username: true,
+      fullName: true,
       email: true,
       bio: true,
       location: true,
@@ -53,6 +54,18 @@ export const loginUser = async (data: LoginRequest) => {
 
   const user = await prisma.user.findUnique({
     where: { username },
+    select: {
+      id: true,
+      username: true,
+      fullName: true,
+      email: true,
+      password: true,
+      bio: true,
+      location: true,
+      avatarUrl: true,
+      avatarPublicId: true,
+      createdAt: true,
+    },
   });
 
   if (!user) {
@@ -60,11 +73,12 @@ export const loginUser = async (data: LoginRequest) => {
   }
 
   const isPasswordCorrect = await bcrypt.compare(password, user.password);
-  const token = generateToken(user.id);
 
   if (!isPasswordCorrect) {
     throw new Error("Invalid username or password");
   }
+
+  const token = generateToken(user.id);
 
   return {
     message: "Login successful 💚",
@@ -72,6 +86,7 @@ export const loginUser = async (data: LoginRequest) => {
     user: {
       id: user.id,
       username: user.username,
+      fullName: user.fullName ?? null,
       bio: user.bio,
       location: user.location,
       email: user.email,
