@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
-import { loginUser, registerUser } from "../services/auth.service.js";
+import {
+  changeUserPassword,
+  changeUserUsername,
+  loginUser,
+  registerUser,
+  verifyUserEmail,
+} from "../services/auth.service.js";
 import { LoginRequest, RegisterRequest, UpdateProfileRequest } from "../types/auth.types.js";
 import { prisma } from "../config/prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
@@ -46,6 +52,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       username: true,
       email: true,
       fullName: true,
+      emailVerified: true,
       bio: true,
       location: true,
       avatarUrl: true,
@@ -57,6 +64,95 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   return res.status(200).json({
     user,
   });
+};
+
+export const changeUsername = async (req: AuthRequest, res: Response) => {
+  try {
+    const { newUsername } = req.body as {
+      newUsername?: string;
+    };
+
+    if (typeof newUsername !== "string") {
+      return res.status(400).json({
+        message: "Username is required.",
+      });
+    }
+
+    const normalizedUsername = newUsername.trim().toLowerCase();
+
+    const updatedUser = await changeUserUsername(req.userId!, normalizedUsername);
+
+    return res.status(200).json({
+      message: "Username changed successfully.",
+      user: updatedUser,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: error instanceof Error ? error.message : "Failed to change username",
+    });
+  }
+};
+
+export const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+
+    if (!token) {
+      return res.status(400).json({ message: "Invalid verification link." });
+    }
+
+    await verifyUserEmail(token);
+
+    return res.status(200).json({ message: "Email verified successfully." });
+  } catch (error) {
+    return res.status(400).json({
+      message: error instanceof Error ? error.message : "Failed to verify email",
+    });
+  }
+};
+
+export const changePassword = async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body as {
+      currentPassword?: string;
+      newPassword?: string;
+      confirmPassword?: string;
+    };
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        message: "All password fields are required.",
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        message: "New password and confirmation do not match.",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        message: "New password must be at least 8 characters.",
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      return res.status(400).json({
+        message: "New password must be different from the current password.",
+      });
+    }
+
+    await changeUserPassword(req.userId!, currentPassword, newPassword);
+
+    return res.status(200).json({
+      message: "Password changed successfully.",
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: error instanceof Error ? error.message : "Failed to change password",
+    });
+  }
 };
 
 export const updateProfile = async (
