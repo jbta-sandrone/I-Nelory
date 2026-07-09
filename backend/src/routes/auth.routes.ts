@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { changePassword, changeUsername, getMe, login, register, updateProfile, updateAvatar, verifyEmail } from "../controllers/auth.controller.js";
+import { changePassword, changeUsername, getMe, login, register, requestChangeEmail, updateProfile, updateAvatar, verifyEmail } from "../controllers/auth.controller.js";
 import { validate } from "../middleware/validate.js";
 import { loginSchema, registerSchema } from "../validators/auth.validator.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
@@ -19,6 +19,8 @@ router.get("/verify-email", verifyEmail);
 router.patch("/change-username", authenticate, changeUsername);
 
 router.patch("/change-password", authenticate, changePassword);
+
+router.patch("/change-email/request", authenticate, requestChangeEmail);
 
 router.patch("/profile", authenticate, updateProfile);
 

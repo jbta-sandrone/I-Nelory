@@ -154,9 +154,57 @@ export async function verifyEmail(token: string) {
     `${AUTH_API_BASE_URL}/verify-email?token=${encodeURIComponent(token)}`
   );
 
-  return parseJsonResponse<{ message: string }>(
+  return parseJsonResponse<{ message: string; type?: string }>(
     response,
     "Email verification failed"
+  );
+}
+
+export async function requestChangeEmail(token: string, payload: { newEmail: string; currentPassword: string }) {
+  const response = await fetch(`${AUTH_API_BASE_URL}/change-email/request`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseJsonResponse<{ message: string }>(
+    response,
+    "Unable to request email change"
+  );
+}
+
+export async function changeUsername(token: string, newUsername: string) {
+  const response = await fetch(`${AUTH_API_BASE_URL}/change-username`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ newUsername }),
+  });
+
+  return parseJsonResponse<{ message: string; user: AuthUser }>(
+    response,
+    "Unable to change username"
+  );
+}
+
+export async function changePassword(token: string, payload: { currentPassword: string; newPassword: string; confirmPassword: string }) {
+  const response = await fetch(`${AUTH_API_BASE_URL}/change-password`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseJsonResponse<{ message: string }>(
+    response,
+    "Unable to change password"
   );
 }
 

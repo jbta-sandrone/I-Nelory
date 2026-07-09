@@ -4,12 +4,14 @@ import {
   changeUserUsername,
   loginUser,
   registerUser,
+  requestEmailChange,
   verifyUserEmail,
 } from "../services/auth.service.js";
 import { LoginRequest, RegisterRequest, UpdateProfileRequest } from "../types/auth.types.js";
 import { prisma } from "../config/prisma.js";
 import { AuthRequest } from "../middleware/auth.js";
 import { uploadAvatar, deleteAvatar } from "../services/cloudinary.service.js";
+import { notifyUser } from "../services/notification.service.js";
 
 export const register = async (
   req: Request<{}, {}, RegisterRequest>,
@@ -101,12 +103,35 @@ export const verifyEmail = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid verification link." });
     }
 
-    await verifyUserEmail(token);
+    const result = await verifyUserEmail(token);
 
-    return res.status(200).json({ message: "Email verified successfully." });
+    return res.status(200).json(result);
   } catch (error) {
     return res.status(400).json({
       message: error instanceof Error ? error.message : "Failed to verify email",
+    });
+  }
+};
+
+export const requestChangeEmail = async (req: AuthRequest, res: Response) => {
+  try {
+    const { newEmail, currentPassword } = req.body as {
+      newEmail?: string;
+      currentPassword?: string;
+    };
+
+    if (!newEmail || !currentPassword) {
+      return res.status(400).json({
+        message: "New email and current password are required.",
+      });
+    }
+
+    const result = await requestEmailChange(req.userId!, newEmail, currentPassword);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(400).json({
+      message: error instanceof Error ? error.message : "Failed to request email change",
     });
   }
 };
@@ -184,6 +209,21 @@ export const updateProfile = async (
       },
     });
 
+    try {
+      await notifyUser({
+        userId: req.userId!,
+        title: "Profile updated",
+        message: "Your profile details were updated successfully.",
+        category: "Account",
+        type: "SUCCESS",
+        icon: "👤",
+        actionType: "profile",
+        actionId: req.userId!,
+      });
+    } catch (error) {
+      console.warn("Failed to create profile update notification", error);
+    }
+
     return res.status(200).json({
       message: "Profile updated successfully 💚",
       user: updatedUser,
@@ -245,6 +285,21 @@ export const updateAvatar = async (req: AuthRequest, res: Response) => {
       } catch (err) {
         console.warn("Failed to delete previous avatar:", err);
       }
+    }
+
+    try {
+      await notifyUser({
+        userId: req.userId!,
+        title: "Avatar updated",
+        message: "Your profile photo was updated successfully.",
+        category: "Account",
+        type: "SUCCESS",
+        icon: "📷",
+        actionType: "profile",
+        actionId: req.userId!,
+      });
+    } catch (error) {
+      console.warn("Failed to create avatar notification", error);
     }
 
     return res.status(200).json({ message: "Avatar updated successfully", user: updatedUser });

@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import NewMemoryModal from "../components/NewMemoryModal";
 import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
+import { getStoredAuthToken } from "../services/auth";
+import {
+  getNotifications,
+  markNotificationRead,
+  type NotificationItem,
+} from "../services/notifications";
+import { formatRelativeTime, getNotificationRoute } from "./NotificationPage";
 
 type NavIconName =
   | "home"
@@ -27,16 +34,7 @@ const navItems: Array<{ label: string; icon: NavIconName; to: string }> = [
   { label: "Settings", icon: "settings", to: "/dashboard/settings" },
 ];
 
-const notifications = [
-  { title: "3 memories uploaded", time: "Just now", type: "Memories" },
-  { title: "Today in your memories", time: "2 hours ago", type: "Memories" },
-  { title: "Family album updated", time: "Yesterday", type: "Albums" },
-  {
-    title: "AI Search found related memories",
-    time: "2 days ago",
-    type: "AI",
-  },
-];
+const DROPDOWN_NOTIFICATION_LIMIT = 5;
 
 function NavIcon({ name }: { name: NavIconName }) {
   const iconProps = {
@@ -130,6 +128,77 @@ export default function Dashboard() {
   const [newMemoryOpen, setNewMemoryOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+
+  const loadDropdownNotifications = async () => {
+    const token = getStoredAuthToken();
+    if (!token) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    setNotificationsLoading(true);
+    try {
+      const data = await getNotifications(token, "All");
+      setNotifications(data.notifications.slice(0, DROPDOWN_NOTIFICATION_LIMIT));
+      setUnreadCount(data.unreadCount);
+    } catch {
+      // Fail silently in the dropdown; the full notifications page will surface errors.
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadDropdownNotifications();
+
+    const intervalId = window.setInterval(() => {
+      void loadDropdownNotifications();
+    }, 20000);
+
+    const handleRefreshEvent = () => {
+      void loadDropdownNotifications();
+    };
+    window.addEventListener("notifications:refresh", handleRefreshEvent);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("notifications:refresh", handleRefreshEvent);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (notificationOpen) {
+      void loadDropdownNotifications();
+    }
+  }, [notificationOpen]);
+
+  const handleNotificationClick = async (notification: NotificationItem) => {
+    setNotificationOpen(false);
+
+    if (!notification.isRead) {
+      const token = getStoredAuthToken();
+      if (token) {
+        try {
+          await markNotificationRead(token, notification.id);
+          setNotifications((current) =>
+            current.map((item) =>
+              item.id === notification.id ? { ...item, isRead: true } : item
+            )
+          );
+          setUnreadCount((current) => Math.max(0, current - 1));
+          window.dispatchEvent(new Event("notifications:refresh"));
+        } catch {
+          // Ignore mark-as-read failures; still navigate the user.
+        }
+      }
+    }
+
+    navigate(getNotificationRoute(notification.actionType));
+  };
 
   const navigateFromAvatar = (path: string) => {
     setAvatarOpen(false);
@@ -326,7 +395,11 @@ export default function Dashboard() {
                   <path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8" />
                   <path d="M13.7 21a2 2 0 0 1-3.4 0" />
                 </svg>
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                {unreadCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border-2 border-white bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                ) : null}
               </button>
 
               <AnimatePresence>
@@ -343,23 +416,45 @@ export default function Dashboard() {
                         Notifications
                       </p>
                       <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                        4 new
+                        {unreadCount > 0 ? `${unreadCount} new` : "All caught up"}
                       </span>
                     </div>
-                    <div className="mt-1 space-y-1">
-                      {notifications.map((notification) => (
-                        <div
-                          key={notification.title}
-                          className="rounded-2xl p-3 transition hover:bg-emerald-50/70"
-                        >
-                          <p className="text-sm font-semibold text-slate-800">
-                            {notification.title}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {notification.type} - {notification.time}
-                          </p>
-                        </div>
-                      ))}
+                    <div className="mt-1 max-h-80 space-y-1 overflow-y-auto">
+                      {notificationsLoading && notifications.length === 0 ? (
+                        <p className="px-3 py-6 text-center text-sm text-slate-400">
+                          Loading notifications...
+                        </p>
+                      ) : notifications.length === 0 ? (
+                        <p className="px-3 py-6 text-center text-sm text-slate-400">
+                          No notifications yet.
+                        </p>
+                      ) : (
+                        notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() => void handleNotificationClick(notification)}
+                            className={`flex w-full items-start gap-3 rounded-2xl p-3 text-left transition hover:bg-emerald-50/70 ${
+                              notification.isRead ? "opacity-70" : ""
+                            }`}
+                          >
+                            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-sm font-semibold text-emerald-700">
+                              {notification.icon || notification.category?.charAt(0) || "N"}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-800">
+                                {notification.title}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {notification.category} - {formatRelativeTime(notification.updatedAt)}
+                              </p>
+                            </span>
+                            {!notification.isRead ? (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                            ) : null}
+                          </button>
+                        ))
+                      )}
                     </div>
                     <button
                       type="button"

@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes.js";
 import memoryRoutes from "./routes/memory.routes.js";
 import albumRoutes from "./routes/album.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 const app = express();
 
@@ -24,5 +25,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/memories", memoryRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 export default app;

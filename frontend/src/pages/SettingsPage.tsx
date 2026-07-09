@@ -1,5 +1,14 @@
 import { motion, type Variants } from "framer-motion";
 import { useState } from "react";
+import FeedbackDialog, { type FeedbackState } from "../components/FeedbackDialog";
+import { useAuth } from "../context/AuthContext";
+import {
+  changePassword,
+  changeUsername,
+  getStoredAuthToken,
+  requestChangeEmail,
+  saveAuthUser,
+} from "../services/auth";
 
 type ToggleKey =
   | "compactMode"
@@ -38,12 +47,6 @@ const staggerContainer: Variants = {
       delayChildren: 0.05,
     },
   },
-};
-
-const account = {
-  fullName: "Jonel Bryan Ablog",
-  email: "jonel@example.com",
-  username: "@jonelmemory",
 };
 
 const storageItems = [
@@ -138,7 +141,22 @@ function SectionTitle({
 }
 
 export default function SettingsPage() {
+  const { user: authUser, setUser } = useAuth();
   const [theme, setTheme] = useState("Light");
+  const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
+  const [usernameForm, setUsernameForm] = useState({ username: authUser?.username ?? "" });
+  const [isChangingUsername, setIsChangingUsername] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailForm, setEmailForm] = useState({ newEmail: "", currentPassword: "" });
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
     compactMode: false,
     memoryReminders: true,
@@ -159,6 +177,141 @@ export default function SettingsPage() {
     }));
   };
 
+  const handleChangeUsername = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      setFeedback({
+        icon: "⚠️",
+        title: "Session expired",
+        message: "Please sign in again to change your username.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsChangingUsername(true);
+
+    try {
+      const response = await changeUsername(token, usernameForm.username.trim());
+      setUser(response.user);
+      saveAuthUser(response.user);
+      setFeedback({
+        icon: "✓",
+        title: "Username updated",
+        message: response.message,
+        type: "success",
+      });
+      setIsUsernameModalOpen(false);
+      setUsernameForm({ username: response.user.username });
+    } catch (error) {
+      setFeedback({
+        icon: "⚠️",
+        title: "Could not update username",
+        message:
+          error instanceof Error ? error.message : "Please try again in a moment.",
+        type: "error",
+      });
+    } finally {
+      setIsChangingUsername(false);
+    }
+  };
+
+  const handleChangeEmailRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      setFeedback({
+        icon: "⚠️",
+        title: "Session expired",
+        message: "Please sign in again to change your email.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsChangingEmail(true);
+
+    try {
+      const response = await requestChangeEmail(token, {
+        newEmail: emailForm.newEmail.trim(),
+        currentPassword: emailForm.currentPassword,
+      });
+
+      setFeedback({
+        icon: "✉️",
+        title: "Verification email sent",
+        message: response.message,
+        type: "success",
+      });
+      setIsEmailModalOpen(false);
+      setEmailForm({ newEmail: "", currentPassword: "" });
+    } catch (error) {
+      setFeedback({
+        icon: "⚠️",
+        title: "Could not update email",
+        message:
+          error instanceof Error ? error.message : "Please try again in a moment.",
+        type: "error",
+      });
+    } finally {
+      setIsChangingEmail(false);
+    }
+  };
+
+  const handleChangePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      setFeedback({
+        icon: "⚠️",
+        title: "Session expired",
+        message: "Please sign in again to change your password.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const response = await changePassword(token, {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+
+      setFeedback({
+        icon: "✓",
+        title: "Password updated",
+        message: response.message,
+        type: "success",
+      });
+      setIsPasswordModalOpen(false);
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      setFeedback({
+        icon: "⚠️",
+        title: "Could not update password",
+        message:
+          error instanceof Error ? error.message : "Please try again in a moment.",
+        type: "error",
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <motion.div
       className="mx-auto w-full max-w-7xl space-y-6 overflow-x-hidden pb-8"
@@ -169,7 +322,7 @@ export default function SettingsPage() {
       {/* Page Header */}
       <motion.section
         variants={fadeUp}
-        className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 sm:p-7"
+        className="relative overflow-hidden rounded-4xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 sm:p-7"
       >
         <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-emerald-100/70 blur-3xl" />
         <div className="relative min-w-0">
@@ -203,34 +356,70 @@ export default function SettingsPage() {
             <SectionTitle
               icon="◌"
               title="Account Settings"
-              subtitle="Basic details for your personal memory profile."
+              subtitle="Manage the essentials for signing in and staying connected."
             />
-            <button
-              type="button"
-              className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md hover:shadow-slate-950/5"
-            >
-              Edit
-            </button>
           </div>
 
           <div className="mt-6 grid gap-3">
-            {[
-              ["Full name", account.fullName],
-              ["Email", account.email],
-              ["Username", account.username],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-                  {label}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-slate-950">
-                  {value}
-                </p>
+            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Username
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-950">
+                    {authUser?.username || "No username"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsUsernameModalOpen(true)}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md hover:shadow-slate-950/5"
+                >
+                  Change Username
+                </button>
               </div>
-            ))}
+            </div>
+
+            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Email
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-950">
+                    {authUser?.email || "No email on file"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEmailModalOpen(true)}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md hover:shadow-slate-950/5"
+                >
+                  Change Email
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Password
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-slate-950">
+                    ••••••••
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(true)}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md hover:shadow-slate-950/5"
+                >
+                  Change Password
+                </button>
+              </div>
+            </div>
           </div>
         </motion.section>
 
@@ -494,12 +683,251 @@ export default function SettingsPage() {
         </motion.section>
       </motion.div>
 
+      {isUsernameModalOpen ? (
+        <div className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-4xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
+                  Account
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Change your username
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Pick a new username that is unique to your account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUsernameModalOpen(false)}
+                className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <form className="mt-6 space-y-4" onSubmit={handleChangeUsername}>
+              <div>
+                <label className="text-sm font-semibold text-slate-950" htmlFor="username">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  value={usernameForm.username}
+                  onChange={(event) => setUsernameForm({ username: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  placeholder="yourname"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsUsernameModalOpen(false)}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingUsername}
+                  className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-400"
+                >
+                  {isChangingUsername ? "Saving..." : "Save username"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isEmailModalOpen ? (
+        <div className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-4xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
+                  Security
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Change your email
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  We will send a verification link to the new address before updating your account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <form className="mt-6 space-y-4" onSubmit={handleChangeEmailRequest}>
+              <div>
+                <label className="text-sm font-semibold text-slate-950" htmlFor="newEmail">
+                  New email
+                </label>
+                <input
+                  id="newEmail"
+                  type="email"
+                  value={emailForm.newEmail}
+                  onChange={(event) => setEmailForm((current) => ({ ...current, newEmail: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-950" htmlFor="currentPassword">
+                  Current password
+                </label>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  value={emailForm.currentPassword}
+                  onChange={(event) => setEmailForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  placeholder="Enter your current password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingEmail}
+                  className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-400"
+                >
+                  {isChangingEmail ? "Sending..." : "Send verification link"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isPasswordModalOpen ? (
+        <div className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-4xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-950/20 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
+                  Security
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Change your password
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Use a strong password that you have not used before.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPasswordModalOpen(false)}
+                className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+
+            <form className="mt-6 space-y-4" onSubmit={handleChangePassword}>
+              <div>
+                <label className="text-sm font-semibold text-slate-950" htmlFor="currentPassword">
+                  Current password
+                </label>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  placeholder="Enter your current password"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-950" htmlFor="newPassword">
+                  New password
+                </label>
+                <input
+                  id="newPassword"
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  placeholder="Choose a new password"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-950" htmlFor="confirmPassword">
+                  Confirm new password
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  placeholder="Confirm your new password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-400"
+                >
+                  {isChangingPassword ? "Saving..." : "Save password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {feedback ? (
+        <FeedbackDialog
+          isOpen={Boolean(feedback)}
+          icon={feedback.icon}
+          title={feedback.title}
+          message={feedback.message}
+          type={feedback.type}
+          onDismiss={() => setFeedback(null)}
+        />
+      ) : null}
+
       {/* Danger Zone */}
       <motion.section
         variants={fadeUp}
         whileHover={{ y: -4 }}
         transition={{ duration: 0.3 }}
-        className="rounded-[2rem] border border-red-100 bg-white p-5 shadow-sm shadow-red-950/5 sm:p-6"
+        className="rounded-4xl border border-red-100 bg-white p-5 shadow-sm shadow-red-950/5 sm:p-6"
       >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">

@@ -8,6 +8,7 @@ import {
   UpdateMemoryRequest,
 } from "../types/memory.types.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { notifyUser } from "./notification.service.js";
 
 const getVerifiedAlbumId = async (
   userId: string,
@@ -88,6 +89,23 @@ export const createUserMemory = async (
     },
   });
 
+  try {
+    await notifyUser({
+      userId,
+      title: "Memory created",
+      message: `Your memory "${memory.title}" is ready to revisit.`,
+      category: "Memories",
+      type: "SUCCESS",
+      icon: "📝",
+      actionType: "memory",
+      actionId: memory.id,
+      groupKey: `memory-created:${userId}`,
+      canGroup: true,
+    });
+  } catch (error) {
+    console.warn("Failed to create memory notification", error);
+  }
+
   return memory;
 };
 
@@ -112,6 +130,21 @@ export const deleteUserMemory = async (userId: string, memoryId: string) => {
       id: memoryId,
     },
   });
+
+  try {
+    await notifyUser({
+      userId,
+      title: "Memory removed",
+      message: `Your memory "${memory.title}" has been removed.`,
+      category: "Memories",
+      type: "WARNING",
+      icon: "🗑️",
+      actionType: "memory",
+      actionId: memory.id,
+    });
+  } catch (error) {
+    console.warn("Failed to create delete-memory notification", error);
+  }
 
   return memory;
 };
@@ -211,6 +244,23 @@ export const toggleFavoriteMemory = async (
     },
   });
 
+  try {
+    await notifyUser({
+      userId,
+      title: updatedMemory.isFavorite ? "Memory favorited" : "Memory unfavorited",
+      message: updatedMemory.isFavorite
+        ? `"${updatedMemory.title}" is now in your favorites.`
+        : `"${updatedMemory.title}" was removed from favorites.`,
+      category: "Favorites",
+      type: updatedMemory.isFavorite ? "SUCCESS" : "INFO",
+      icon: "⭐",
+      actionType: "favorites",
+      actionId: updatedMemory.id,
+    });
+  } catch (error) {
+    console.warn("Failed to create favorite notification", error);
+  }
+
   return updatedMemory;
 };
 
@@ -237,6 +287,23 @@ export const toggleArchiveMemory = async (
       isArchived: !memory.isArchived,
     },
   });
+
+  try {
+    await notifyUser({
+      userId,
+      title: updatedMemory.isArchived ? "Memory archived" : "Memory restored",
+      message: updatedMemory.isArchived
+        ? `"${updatedMemory.title}" moved to your archive.`
+        : `"${updatedMemory.title}" was restored to your memories.`,
+      category: "Archive",
+      type: updatedMemory.isArchived ? "INFO" : "SUCCESS",
+      icon: "🗂️",
+      actionType: "archive",
+      actionId: updatedMemory.id,
+    });
+  } catch (error) {
+    console.warn("Failed to create archive notification", error);
+  }
 
   return updatedMemory;
 };

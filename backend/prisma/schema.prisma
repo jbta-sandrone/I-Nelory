@@ -123,17 +123,23 @@ model Tag {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  title     String
-  message   String
-  type      NotificationType @default(INFO)
-  isRead    Boolean  @default(false)
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  message     String
+  category    String   @default("Account")
+  type        NotificationType @default(INFO)
+  icon        String?
+  isRead      Boolean  @default(false)
+  actionType  String?
+  actionId    String?
+  groupKey    String?
+  groupCount  Int      @default(1)
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Activity {

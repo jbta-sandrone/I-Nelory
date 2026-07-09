@@ -3,6 +3,7 @@ import {
   deleteAlbumCover,
   uploadAlbumCover,
 } from "./cloudinary.service.js";
+import { notifyUser } from "./notification.service.js";
 
 const albumListInclude = {
   memories: {
@@ -35,13 +36,32 @@ export const createUserAlbum = async (
   userId: string,
   data: { name: string; description?: string }
 ) => {
-  return prisma.album.create({
+  const album = await prisma.album.create({
     data: {
       name: data.name,
       description: data.description,
       userId,
     },
   });
+
+  try {
+    await notifyUser({
+      userId,
+      title: "Album created",
+      message: `Your album "${album.name}" is ready.`,
+      category: "Albums",
+      type: "SUCCESS",
+      icon: "🗂️",
+      actionType: "album",
+      actionId: album.id,
+      groupKey: `album-created:${userId}`,
+      canGroup: true,
+    });
+  } catch (error) {
+    console.warn("Failed to create album notification", error);
+  }
+
+  return album;
 };
 
 export const updateUserAlbum = async (

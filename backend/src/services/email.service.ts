@@ -13,8 +13,20 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export const sendVerificationEmail = async (to: string, token: string) => {
+export const sendVerificationEmail = async (
+  to: string,
+  token: string,
+  type: "SIGNUP" | "CHANGE_EMAIL" = "SIGNUP"
+) => {
   const verificationUrl = `${clientUrl}/verify-email?token=${token}`;
+  const isChangeEmail = type === "CHANGE_EMAIL";
+  const subject = isChangeEmail
+    ? "Verify your new I-Nelory email"
+    : "Verify your I-Nelory account";
+  const heading = isChangeEmail ? "Verify your new email address" : "Verify your email";
+  const body = isChangeEmail
+    ? "We received a request to change the email address for your I-Nelory account. Please verify this address to finish the update."
+    : "Thanks for signing up for I-Nelory. Please verify your email address to continue.";
 
   console.log("Sending verification email to:", to);
 
@@ -22,11 +34,11 @@ export const sendVerificationEmail = async (to: string, token: string) => {
     const result = await transporter.sendMail({
       from: fromEmail,
       to,
-      subject: "Verify your I-Nelory account",
+      subject,
       html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
-        <h2 style="color: #047857;">Verify your email</h2>
-        <p>Thanks for signing up for I-Nelory. Please verify your email address to continue.</p>
+        <h2 style="color: #047857;">${heading}</h2>
+        <p>${body}</p>
         <p><a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#047857;color:white;text-decoration:none;border-radius:999px;">Verify Email</a></p>
         <p>If the button does not work, copy and paste this link into your browser:</p>
         <p>${verificationUrl}</p>

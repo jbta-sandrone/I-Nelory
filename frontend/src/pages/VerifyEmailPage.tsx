@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { verifyEmail } from "../services/auth";
+import { useAuth } from "../context/AuthContext";
+import { clearAuthSession, verifyEmail } from "../services/auth";
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const [message, setMessage] = useState<string>("Verifying your email...");
   const [error, setError] = useState<string | null>(null);
+  const [verifiedType, setVerifiedType] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const token = searchParams.get("token");
 
   useEffect(() => {
@@ -17,8 +20,15 @@ export default function VerifyEmailPage() {
     }
 
     verifyEmail(token)
-      .then(({ message: successMessage }) => {
+      .then(({ message: successMessage, type }) => {
+        setVerifiedType(type ?? null);
         setMessage(successMessage || "Email verified successfully.");
+
+        if (type === "CHANGE_EMAIL") {
+          clearAuthSession();
+          setUser(null);
+          window.setTimeout(() => navigate("/"), 1200);
+        }
       })
       .catch((error) => {
         setMessage(
@@ -58,7 +68,7 @@ export default function VerifyEmailPage() {
                 onClick={() => navigate("/")}
                 className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
-                Log in
+                {verifiedType === "CHANGE_EMAIL" ? "Go to sign in" : "Log in"}
               </button>
             ) : null}
           </div>

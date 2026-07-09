@@ -4,6 +4,7 @@ import { prisma } from "../config/prisma.js";
 import { RegisterRequest, LoginRequest } from "../types/auth.types.js";
 import { generateToken } from "../utils/jwt.js";
 import { sendVerificationEmail } from "./email.service.js";
+import { notifyUser } from "./notification.service.js";
 
 export const registerUser = async (data: RegisterRequest) => {
   const { username, email, password } = data;
@@ -68,13 +69,28 @@ export const registerUser = async (data: RegisterRequest) => {
   });
 
   try {
-    await sendVerificationEmail(user.email, token);
+    await sendVerificationEmail(user.email, token, "SIGNUP");
   } catch (error) {
     console.error(
       "Failed to send verification email to",
       user.email,
       error instanceof Error ? error.message : error
     );
+  }
+
+  try {
+    await notifyUser({
+      userId: user.id,
+      title: "Welcome to I-Nelory",
+      message: "Your account is ready. Verify your email to start capturing memories.",
+      category: "Account",
+      type: "SUCCESS",
+      icon: "✨",
+      actionType: "profile",
+      actionId: user.id,
+    });
+  } catch (error) {
+    console.warn("Failed to create welcome notification", error);
   }
 
   return {
@@ -150,10 +166,14 @@ export const verifyUserEmail = async (token: string) => {
       userId: true,
       expiresAt: true,
       type: true,
+      pendingEmail: true,
     },
   });
 
-  if (!verification || verification.type !== "SIGNUP") {
+  if (
+    !verification ||
+    (verification.type !== "SIGNUP" && verification.type !== "CHANGE_EMAIL")
+  ) {
     throw new Error("Invalid verification link.");
   }
 
@@ -165,14 +185,152 @@ export const verifyUserEmail = async (token: string) => {
     throw new Error("Verification link has expired.");
   }
 
-  await prisma.user.update({
-    where: { id: verification.userId },
-    data: { emailVerified: true } as any,
-  });
+  const verificationType = verification.type;
+
+  if (verificationType === "CHANGE_EMAIL") {
+    if (!verification.pendingEmail) {
+      throw new Error("Invalid verification link.");
+    }
+
+    await prisma.user.update({
+      where: { id: verification.userId },
+      data: {
+        email: verification.pendingEmail,
+        emailVerified: true,
+      } as any,
+    });
+
+    try {
+      await notifyUser({
+        userId: verification.userId,
+        title: "Email changed",
+        message: "Your account email address was updated successfully.",
+        category: "Security",
+        type: "SUCCESS",
+        icon: "✉️",
+        actionType: "settings",
+        actionId: verification.userId,
+      });
+    } catch (error) {
+      console.warn("Failed to create email change notification", error);
+    }
+  } else {
+    await prisma.user.update({
+      where: { id: verification.userId },
+      data: { emailVerified: true } as any,
+    });
+
+    try {
+      await notifyUser({
+        userId: verification.userId,
+        title: "Email verified",
+        message: "Your email address is now verified.",
+        category: "Security",
+        type: "SUCCESS",
+        icon: "✓",
+        actionType: "settings",
+        actionId: verification.userId,
+      });
+    } catch (error) {
+      console.warn("Failed to create verification notification", error);
+    }
+  }
 
   await prisma.emailVerification.delete({
     where: { id: verification.id },
   });
+
+  return {
+    message:
+      verificationType === "CHANGE_EMAIL"
+        ? "Your email address has been updated successfully. Please sign in again."
+        : "Email verified successfully.",
+    type: verificationType,
+  };
+};
+
+export const requestEmailChange = async (
+  userId: string,
+  newEmail: string,
+  currentPassword: string
+) => {
+  const trimmedEmail = newEmail.trim().toLowerCase();
+
+  if (!trimmedEmail) {
+    throw new Error("Email is required.");
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    throw new Error("Please enter a valid email address.");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      password: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const isCurrentPasswordCorrect = await bcrypt.compare(
+    currentPassword,
+    user.password
+  );
+
+  if (!isCurrentPasswordCorrect) {
+    throw new Error("Current password is incorrect.");
+  }
+
+  if (user.email.toLowerCase() === trimmedEmail) {
+    throw new Error("New email must be different from your current email.");
+  }
+
+  const existingEmail = await prisma.user.findUnique({
+    where: { email: trimmedEmail },
+  });
+
+  if (existingEmail && existingEmail.id !== userId) {
+    throw new Error("Email already exists.");
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  await prisma.emailVerification.deleteMany({
+    where: {
+      userId,
+      type: "CHANGE_EMAIL",
+    },
+  });
+
+  await prisma.emailVerification.create({
+    data: {
+      userId,
+      token,
+      type: "CHANGE_EMAIL",
+      pendingEmail: trimmedEmail,
+      expiresAt,
+    } as any,
+  });
+
+  try {
+    await sendVerificationEmail(trimmedEmail, token, "CHANGE_EMAIL");
+  } catch (error) {
+    console.error(
+      "Failed to send email change verification email to",
+      trimmedEmail,
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  return {
+    message: `We sent a verification link to ${trimmedEmail}. Please verify the new email to finish the change.`,
+  };
 };
 
 export const changeUserUsername = async (userId: string, newUsername: string) => {
@@ -239,6 +397,21 @@ export const changeUserUsername = async (userId: string, newUsername: string) =>
     },
   });
 
+  try {
+    await notifyUser({
+      userId,
+      title: "Username updated",
+      message: `Your username is now ${updatedUser.username}.`,
+      category: "Account",
+      type: "SUCCESS",
+      icon: "👤",
+      actionType: "settings",
+      actionId: userId,
+    });
+  } catch (error) {
+    console.warn("Failed to create username notification", error);
+  }
+
   return updatedUser;
 };
 
@@ -282,4 +455,19 @@ export const changeUserPassword = async (
     where: { id: userId },
     data: { password: hashedPassword },
   });
+
+  try {
+    await notifyUser({
+      userId,
+      title: "Password updated",
+      message: "Your password was changed successfully.",
+      category: "Security",
+      type: "SUCCESS",
+      icon: "🔐",
+      actionType: "settings",
+      actionId: userId,
+    });
+  } catch (error) {
+    console.warn("Failed to create password notification", error);
+  }
 };
