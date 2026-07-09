@@ -1,4 +1,5 @@
 import express from "express";
+import dashboardRoutes from "./routes/dashboard.routes.js";
 import cors from "cors";
 import healthRoutes from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -21,6 +22,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/health", healthRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/memories", memoryRoutes);
 app.use("/api/albums", albumRoutes);
