@@ -1,4 +1,6 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
+import MemoryMedia from "./MemoryMedia";
+import { formatMoodLabel } from "../utils/memoryMetadata";
 
 export type MemoryCardType = "Photo" | "Video" | "Story";
 
@@ -11,6 +13,8 @@ export type MemoryCardMemory = {
   type: MemoryCardType;
   tags: string[];
   image: string | null;
+  mediaUrl?: string | null;
+  mediaType?: string | null;
   favorite: boolean;
 };
 
@@ -22,6 +26,7 @@ type MemoryCardProps<TMemory extends MemoryCardMemory> = {
   onEdit: (memory: TMemory) => void;
   onArchive: (memory: TMemory) => void;
   onDelete: (memory: TMemory) => void;
+  onOpen?: (memory: TMemory) => void;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -55,7 +60,13 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
   onEdit,
   onArchive,
   onDelete,
+  onOpen,
 }: MemoryCardProps<TMemory>) {
+  const mediaUrl = memory.mediaUrl ?? memory.image;
+  const isVideo = memory.mediaType?.toUpperCase() === "VIDEO";
+  const visibleTags = memory.tags.slice(0, 3);
+  const hiddenTagCount = Math.max(memory.tags.length - visibleTags.length, 0);
+
   return (
     <motion.article
       variants={fadeUp}
@@ -64,25 +75,29 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
       className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
     >
       <div className="relative h-52 overflow-hidden">
-        {memory.image ? (
-          memory.type === "Video" ? (
-            <video
-              src={memory.image}
+        {onOpen ? (
+          <button
+            type="button"
+            aria-label={`Open ${memory.title}`}
+            onClick={() => onOpen(memory)}
+            className="block h-full w-full text-left"
+          >
+            <MemoryMedia
+              src={mediaUrl}
+              type={memory.mediaType ?? memory.type}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-              muted
-              playsInline
+              placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105"
+              showPlayOverlay={isVideo}
             />
-          ) : (
-            <img
-              src={memory.image}
-              alt=""
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-            />
-          )
+          </button>
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105">
-            M
-          </div>
+          <MemoryMedia
+            src={mediaUrl}
+            type={memory.mediaType ?? memory.type}
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+            placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105"
+            showPlayOverlay={isVideo}
+          />
         )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
           <span
@@ -93,7 +108,10 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
           <button
             type="button"
             aria-label={`Favorite ${memory.title}`}
-            onClick={() => onToggleFavorite(memory)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleFavorite(memory);
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white"
           >
             {memory.favorite ? "\u2665" : "\u2661"}
@@ -114,7 +132,10 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
             <button
               type="button"
               aria-label={`Open menu for ${memory.title}`}
-              onClick={() => onToggleMenu(memory.id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleMenu(memory.id);
+              }}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg leading-none text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
             >
               &hellip;
@@ -133,7 +154,8 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
                     <button
                       key={action}
                       type="button"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         if (action === "Edit") {
                           onEdit(memory);
                         }
@@ -163,16 +185,21 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
 
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {memory.mood}
+            {formatMoodLabel(memory.mood)}
           </span>
-          {memory.tags.map((tag) => (
+          {visibleTags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500"
+              className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
             >
               {tag}
             </span>
           ))}
+          {hiddenTagCount > 0 ? (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              +{hiddenTagCount} more
+            </span>
+          ) : null}
         </div>
       </div>
     </motion.article>

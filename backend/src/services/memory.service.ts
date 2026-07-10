@@ -1,8 +1,9 @@
 import { prisma } from "../config/prisma.js";
 import {
-  deleteMemoryImage,
-  uploadMemoryImage,
-} from "./cloudinary.service.js";
+  MediaType,
+  type MediaType as PrismaMediaType,
+} from "../generated/prisma/client.js";
+import { deleteMemoryImage, uploadMemoryImage } from "./cloudinary.service.js";
 import {
   CreateMemoryRequest,
   UpdateMemoryRequest,
@@ -10,15 +11,150 @@ import {
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { notifyUser } from "./notification.service.js";
 
-const getVerifiedAlbumId = async (
+type CloudinaryMemoryResourceType = "image" | "video";
+const MAX_MEMORY_TAGS = 20;
+const MAX_MEMORY_TAG_LENGTH = 40;
+
+const memoryWithTagsInclude = {
+  tags: {
+    select: {
+      id: true,
+      name: true,
+      color: true,
+    },
+    orderBy: {
+      name: "asc" as const,
+    },
+  },
+};
+
+const getMediaTypeFromFile = (
+  mediaFile: Express.Multer.File,
+): PrismaMediaType => {
+  return mediaFile.mimetype.startsWith("video/")
+    ? MediaType.VIDEO
+    : MediaType.IMAGE;
+};
+
+function normalizeMediaType(value?: string | null): PrismaMediaType {
+  return value?.toUpperCase() === MediaType.VIDEO
+    ? MediaType.VIDEO
+    : MediaType.IMAGE;
+}
+
+function getCloudinaryResourceType(
+  value?: string | null,
+): CloudinaryMemoryResourceType {
+  return normalizeMediaType(value) === MediaType.VIDEO ? "video" : "image";
+}
+
+function parseTagNames(value?: string[] | string | null) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return [];
+  }
+
+  let rawTags: unknown;
+
+  if (Array.isArray(value)) {
+    rawTags = value;
+  } else if (value.trim().startsWith("[")) {
+    try {
+      rawTags = JSON.parse(value);
+    } catch {
+      rawTags = [];
+    }
+  } else {
+    rawTags = value.split(",");
+  }
+
+  if (!Array.isArray(rawTags)) {
+    return [];
+  }
+
+  const seenTags = new Set<string>();
+
+  return rawTags
+    .map((tag) => String(tag).trim())
+    .map((tag) => tag.replace(/^#+/, "").trim())
+    .map((tag) =>
+      tag.length > MAX_MEMORY_TAG_LENGTH
+        ? tag.slice(0, MAX_MEMORY_TAG_LENGTH).trim()
+        : tag,
+    )
+    .filter((tag) => {
+      if (!tag) {
+        return false;
+      }
+
+      const key = tag.toLowerCase();
+
+      if (seenTags.has(key)) {
+        return false;
+      }
+
+      seenTags.add(key);
+      return true;
+    })
+    .slice(0, MAX_MEMORY_TAGS);
+}
+
+async function getUserTagConnections(
   userId: string,
-  albumId?: string | null
-) => {
+  value?: string[] | string | null,
+) {
+  const tagNames = parseTagNames(value);
+
+  if (tagNames === undefined) {
+    return undefined;
+  }
+
+  const tagConnections: { id: string }[] = [];
+
+  for (const tagName of tagNames) {
+    const existingTag = await prisma.tag.findFirst({
+      where: {
+        userId,
+        name: {
+          equals: tagName,
+          mode: "insensitive",
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingTag) {
+      tagConnections.push(existingTag);
+      continue;
+    }
+
+    const createdTag = await prisma.tag.create({
+      data: {
+        userId,
+        name: tagName,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    tagConnections.push(createdTag);
+  }
+
+  return tagConnections;
+}
+
+const getVerifiedAlbumId = async (userId: string, albumId?: string | null) => {
   if (albumId === undefined) {
     return undefined;
   }
 
-  if (albumId === null) {
+  if (albumId === null || albumId === "" || albumId === "null") {
     return null;
   }
 
@@ -45,6 +181,7 @@ export const getUserMemories = async (userId: string) => {
       userId,
       isArchived: false,
     },
+    include: memoryWithTagsInclude,
     orderBy: {
       createdAt: "desc",
     },
@@ -59,6 +196,7 @@ export const getUserArchivedMemories = async (userId: string) => {
       userId,
       isArchived: true,
     },
+    include: memoryWithTagsInclude,
     orderBy: {
       updatedAt: "desc",
     },
@@ -70,23 +208,33 @@ export const getUserArchivedMemories = async (userId: string) => {
 export const createUserMemory = async (
   userId: string,
   data: CreateMemoryRequest,
-  imageFile?: Express.Multer.File
+  mediaFile?: Express.Multer.File,
 ) => {
-  const uploadedImage = imageFile ? await uploadMemoryImage(imageFile) : null;
+  const uploadedMedia = mediaFile ? await uploadMemoryImage(mediaFile) : null;
+
+  const mediaType = mediaFile
+    ? getMediaTypeFromFile(mediaFile)
+    : normalizeMediaType(data.mediaType);
+
   const albumId = await getVerifiedAlbumId(userId, data.albumId);
+  const tagConnections = await getUserTagConnections(userId, data.tags);
 
   const memory = await prisma.memory.create({
     data: {
       title: data.title,
       description: data.description,
-      mediaUrl: uploadedImage?.secure_url ?? data.mediaUrl,
-      mediaPublicId: uploadedImage?.public_id,
-      mediaType: uploadedImage ? "IMAGE" : data.mediaType,
+      mediaUrl: uploadedMedia?.secure_url ?? data.mediaUrl,
+      mediaPublicId: uploadedMedia?.public_id,
+      mediaType,
       memoryDate: data.memoryDate ? new Date(data.memoryDate) : undefined,
       location: data.location,
       ...(albumId !== undefined ? { albumId } : {}),
+      ...(tagConnections && tagConnections.length > 0
+        ? { tags: { connect: tagConnections } }
+        : {}),
       userId,
     },
+    include: memoryWithTagsInclude,
   });
 
   try {
@@ -122,7 +270,10 @@ export const deleteUserMemory = async (userId: string, memoryId: string) => {
   }
 
   if (memory.mediaPublicId) {
-    await deleteMemoryImage(memory.mediaPublicId);
+    await deleteMemoryImage(
+      memory.mediaPublicId,
+      getCloudinaryResourceType(memory.mediaType),
+    );
   }
 
   await prisma.memory.delete({
@@ -152,13 +303,35 @@ export const deleteUserMemory = async (userId: string, memoryId: string) => {
 export const updateUserMemory = async (
   userId: string,
   memoryId: string,
-  data: UpdateMemoryRequest
+  data: UpdateMemoryRequest,
+  mediaFile?: Express.Multer.File,
 ) => {
-  const albumId = await getVerifiedAlbumId(userId, data.albumId);
-  const updateResult = await prisma.memory.updateMany({
+  const memory = await prisma.memory.findFirst({
     where: {
       id: memoryId,
       userId,
+    },
+  });
+
+  if (!memory) {
+    throw new Error("Memory not found");
+  }
+
+  const albumId = await getVerifiedAlbumId(userId, data.albumId);
+  const tagConnections = await getUserTagConnections(userId, data.tags);
+  const uploadedMedia = mediaFile ? await uploadMemoryImage(mediaFile) : null;
+  const newMediaType = mediaFile ? getMediaTypeFromFile(mediaFile) : undefined;
+
+  if (uploadedMedia && memory.mediaPublicId) {
+    await deleteMemoryImage(
+      memory.mediaPublicId,
+      getCloudinaryResourceType(memory.mediaType),
+    );
+  }
+
+  const updatedMemory = await prisma.memory.update({
+    where: {
+      id: memoryId,
     },
     data: {
       title: data.title,
@@ -166,23 +339,17 @@ export const updateUserMemory = async (
       location: data.location ?? null,
       memoryDate: data.memoryDate ? new Date(data.memoryDate) : null,
       ...(albumId !== undefined ? { albumId } : {}),
+      ...(tagConnections !== undefined ? { tags: { set: tagConnections } } : {}),
+      ...(uploadedMedia
+        ? {
+            mediaUrl: uploadedMedia.secure_url,
+            mediaPublicId: uploadedMedia.public_id,
+            mediaType: newMediaType,
+          }
+        : {}),
     },
+    include: memoryWithTagsInclude,
   });
-
-  if (updateResult.count === 0) {
-    throw new Error("Memory not found");
-  }
-
-  const updatedMemory = await prisma.memory.findFirst({
-    where: {
-      id: memoryId,
-      userId,
-    },
-  });
-
-  if (!updatedMemory) {
-    throw new Error("Memory not found");
-  }
 
   return updatedMemory;
 };
@@ -190,7 +357,7 @@ export const updateUserMemory = async (
 export const assignUserMemoryAlbum = async (
   userId: string,
   memoryId: string,
-  albumId: string | null
+  albumId: string | null,
 ) => {
   const memory = await prisma.memory.findFirst({
     where: {
@@ -215,6 +382,7 @@ export const assignUserMemoryAlbum = async (
     data: {
       albumId: verifiedAlbumId ?? null,
     },
+    include: memoryWithTagsInclude,
   });
 
   return updatedMemory;
@@ -222,7 +390,7 @@ export const assignUserMemoryAlbum = async (
 
 export const toggleFavoriteMemory = async (
   userId: string,
-  memoryId: string
+  memoryId: string,
 ) => {
   const memory = await prisma.memory.findFirst({
     where: {
@@ -242,12 +410,15 @@ export const toggleFavoriteMemory = async (
     data: {
       isFavorite: !memory.isFavorite,
     },
+    include: memoryWithTagsInclude,
   });
 
   try {
     await notifyUser({
       userId,
-      title: updatedMemory.isFavorite ? "Memory favorited" : "Memory unfavorited",
+      title: updatedMemory.isFavorite
+        ? "Memory favorited"
+        : "Memory unfavorited",
       message: updatedMemory.isFavorite
         ? `"${updatedMemory.title}" is now in your favorites.`
         : `"${updatedMemory.title}" was removed from favorites.`,
@@ -264,10 +435,7 @@ export const toggleFavoriteMemory = async (
   return updatedMemory;
 };
 
-export const toggleArchiveMemory = async (
-  userId: string,
-  memoryId: string
-) => {
+export const toggleArchiveMemory = async (userId: string, memoryId: string) => {
   const memory = await prisma.memory.findFirst({
     where: {
       id: memoryId,
@@ -286,6 +454,7 @@ export const toggleArchiveMemory = async (
     data: {
       isArchived: !memory.isArchived,
     },
+    include: memoryWithTagsInclude,
   });
 
   try {
@@ -308,16 +477,14 @@ export const toggleArchiveMemory = async (
   return updatedMemory;
 };
 
-export const searchMemoriesByQuery = async (
-  userId: string,
-  query: string
-) => {
+export const searchMemoriesByQuery = async (userId: string, query: string) => {
   // Fetch all non-archived memories for the user
   const memories = await prisma.memory.findMany({
     where: {
       userId,
       isArchived: false,
     },
+    include: memoryWithTagsInclude,
     orderBy: {
       createdAt: "desc",
     },
@@ -335,7 +502,7 @@ export const searchMemoriesByQuery = async (
   const memoryText = memories
     .map(
       (m) =>
-        `ID: ${m.id}\nTitle: ${m.title}\nDescription: ${m.description || ""}\nLocation: ${m.location || ""}\nDate: ${m.memoryDate ? m.memoryDate.toISOString() : "Unknown"}\n`
+        `ID: ${m.id}\nTitle: ${m.title}\nDescription: ${m.description || ""}\nMood: ${m.location || ""}\nTags: ${m.tags.map((tag) => tag.name).join(", ")}\nDate: ${m.memoryDate ? m.memoryDate.toISOString() : "Unknown"}\n`,
     )
     .join("\n---\n");
 

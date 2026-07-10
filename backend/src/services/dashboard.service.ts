@@ -21,6 +21,19 @@ function getYear(date: Date | null) {
   return date?.getFullYear() || 0;
 }
 
+const memoryTagsInclude = {
+  tags: {
+    select: {
+      id: true,
+      name: true,
+      color: true,
+    },
+    orderBy: {
+      name: "asc" as const,
+    },
+  },
+};
+
 export async function getDashboardSummary(userId: string) {
   const today = new Date();
 
@@ -64,6 +77,7 @@ export async function getDashboardSummary(userId: string) {
       orderBy: {
         createdAt: "desc",
       },
+      include: memoryTagsInclude,
     }),
     prisma.memory.findMany({
       where: {
@@ -75,6 +89,7 @@ export async function getDashboardSummary(userId: string) {
       orderBy: {
         createdAt: "desc",
       },
+      include: memoryTagsInclude,
       take: 10,
     }),
     prisma.memory.findMany({
@@ -82,6 +97,7 @@ export async function getDashboardSummary(userId: string) {
       orderBy: {
         createdAt: "desc",
       },
+      include: memoryTagsInclude,
       take: 6,
     }),
     prisma.album.findMany({
@@ -108,6 +124,7 @@ export async function getDashboardSummary(userId: string) {
       orderBy: {
         memoryDate: "desc",
       },
+      include: memoryTagsInclude,
     }),
   ]);
 

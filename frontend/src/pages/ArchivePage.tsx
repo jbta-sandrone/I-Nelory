@@ -9,6 +9,9 @@ import FeedbackDialog, {
   type FeedbackState,
 } from "../components/FeedbackDialog";
 import type { ApiMemory } from "../components/NewMemoryModal";
+import MemoryMedia from "../components/MemoryMedia";
+import MemoryViewerModal from "../components/MemoryViewerModal";
+import { getMemoryTagNames } from "../utils/memoryMetadata";
 
 type ArchiveAction = "restore" | "delete" | null;
 
@@ -20,7 +23,11 @@ type ArchivedMemory = {
   caption: string;
   type: "Photo" | "Video" | "Story";
   album: string;
-  image: string;
+  image: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  mood: string;
+  tags: string[];
 };
 
 type MemoriesResponse = {
@@ -60,9 +67,6 @@ const staggerContainer: Variants = {
   },
 };
 
-const fallbackMediaUrl =
-  "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=900&q=80";
-
 const typeStyles: Record<ArchivedMemory["type"], string> = {
   Photo: "bg-emerald-50 text-emerald-700 border-emerald-100",
   Video: "bg-slate-950 text-white border-slate-950",
@@ -78,13 +82,13 @@ function getStoredToken() {
 }
 
 function getMemoryType(mediaType?: string | null): ArchivedMemory["type"] {
-  const normalizedType = mediaType?.toLowerCase() ?? "";
+  const normalizedType = mediaType?.toUpperCase() ?? "";
 
-  if (normalizedType.includes("video")) {
+  if (normalizedType === "VIDEO") {
     return "Video";
   }
 
-  if (normalizedType.includes("story") || normalizedType.includes("text")) {
+  if (normalizedType.includes("STORY") || normalizedType.includes("TEXT")) {
     return "Story";
   }
 
@@ -128,6 +132,8 @@ function formatArchivedDate(updatedAt?: string | null) {
 
 function mapApiMemory(memory: ApiMemory): ArchivedMemory {
   const type = getMemoryType(memory.mediaType);
+  const mediaUrl = memory.mediaUrl?.trim() || null;
+  const tags = getMemoryTagNames(memory.tags);
 
   return {
     id: memory.id,
@@ -137,7 +143,11 @@ function mapApiMemory(memory: ApiMemory): ArchivedMemory {
     caption: memory.description?.trim() || "No description yet.",
     type,
     album: memory.albumId ? "Album" : "Memory",
-    image: memory.mediaUrl?.trim() || fallbackMediaUrl,
+    image: mediaUrl,
+    mediaUrl,
+    mediaType: memory.mediaType ?? null,
+    mood: memory.location?.trim() || "Neutral",
+    tags,
   };
 }
 
@@ -236,6 +246,7 @@ export default function ArchivePage() {
   const [selectedMemory, setSelectedMemory] = useState<ArchivedMemory | null>(
     null,
   );
+  const [memoryToView, setMemoryToView] = useState<ArchivedMemory | null>(null);
   const [modalAction, setModalAction] = useState<ArchiveAction>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
@@ -307,6 +318,11 @@ export default function ArchivePage() {
     setSelectedMemory(memory);
     setModalAction(action);
     setOpenMenuId(null);
+  };
+
+  const openMemoryViewer = (memory: ArchivedMemory) => {
+    setOpenMenuId(null);
+    setMemoryToView(memory);
   };
 
   const closeModal = () => {
@@ -673,22 +689,15 @@ export default function ArchivePage() {
               whileHover={{ y: -6, scale: 1.01 }}
               transition={{ duration: 0.35 }}
               className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+              onClick={() => openMemoryViewer(memory)}
             >
               <div className="relative h-52 overflow-hidden">
-                {memory.type === "Video" ? (
-                  <video
-                    src={memory.image}
-                    className="h-full w-full object-cover grayscale-[20%] transition duration-500 group-hover:scale-105 group-hover:grayscale-0"
-                    muted
-                    playsInline
-                  />
-                ) : (
-                  <img
-                    src={memory.image}
-                    alt=""
-                    className="h-full w-full object-cover grayscale-[20%] transition duration-500 group-hover:scale-105 group-hover:grayscale-0"
-                  />
-                )}
+                <MemoryMedia
+                  src={memory.mediaUrl}
+                  type={memory.mediaType ?? memory.type}
+                  className="h-full w-full object-cover grayscale-[20%] transition duration-500 group-hover:scale-105 group-hover:grayscale-0"
+                  showPlayOverlay={memory.mediaType?.toUpperCase() === "VIDEO"}
+                />
                 <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
                   <span
                     className={`rounded-full border px-3 py-1 text-xs font-semibold ${typeStyles[memory.type]}`}
@@ -697,7 +706,10 @@ export default function ArchivePage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => openModal(memory, "restore")}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openModal(memory, "restore");
+                    }}
                     className="rounded-full bg-white/90 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
                   >
                     Restore
@@ -720,11 +732,12 @@ export default function ArchivePage() {
                     <button
                       type="button"
                       aria-label={`Open menu for ${memory.title}`}
-                      onClick={() =>
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setOpenMenuId((current) =>
                           current === memory.id ? null : memory.id,
-                        )
-                      }
+                        );
+                      }}
                       className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg leading-none text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
                     >
                       &hellip;
@@ -741,14 +754,20 @@ export default function ArchivePage() {
                         >
                           <button
                             type="button"
-                            onClick={() => openModal(memory, "restore")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openModal(memory, "restore");
+                            }}
                             className="block w-full rounded-xl px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             Restore
                           </button>
                           <button
                             type="button"
-                            onClick={() => openModal(memory, "delete")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openModal(memory, "delete");
+                            }}
                             className="block w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
                           >
                             Delete Permanently
@@ -770,12 +789,30 @@ export default function ArchivePage() {
                   <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                     {memory.archivedDate}
                   </span>
+                  {memory.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {memory.tags.length > 3 ? (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                      +{memory.tags.length - 3} more
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </motion.article>
           ))}
         </motion.section>
       )}
+
+      <MemoryViewerModal
+        memory={memoryToView}
+        onClose={() => setMemoryToView(null)}
+      />
 
       <AnimatePresence>
         <ConfirmationModal

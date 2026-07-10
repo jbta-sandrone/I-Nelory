@@ -33,6 +33,7 @@ router.post(
 router.patch(
   "/:id",
   authenticate,
+  uploadMemoryImageMiddleware,
   validate(updateMemorySchema),
   updateMemory
 );

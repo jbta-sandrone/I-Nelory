@@ -2,12 +2,14 @@ import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import MemoryMedia from "../components/MemoryMedia";
 import {
   getDashboardSummary,
   type DashboardAlbum,
   type DashboardMemory,
   type DashboardSummary,
 } from "../services/dashboard";
+import { formatMoodLabel, getMemoryTagNames } from "../utils/memoryMetadata";
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -153,12 +155,20 @@ function getMediaUrl(memory?: DashboardMemory | null) {
   return "";
 }
 
+function getMemoryMediaType(memory?: DashboardMemory | null) {
+  return memory?.mediaType?.toUpperCase() === "VIDEO" ? "video" : "image";
+}
+
 function getAlbumCoverUrl(album?: DashboardAlbum | null) {
   return album?.coverUrl || album?.imageUrl || "";
 }
 
 function getMemoryTitle(memory: DashboardMemory) {
   return memory.title || "Untitled memory";
+}
+
+function getMemoryMood(memory?: DashboardMemory | null) {
+  return memory?.location?.trim() || "Neutral";
 }
 
 function getAlbumTitle(album: DashboardAlbum) {
@@ -380,13 +390,12 @@ export default function HomePage() {
               >
                 <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="relative min-h-[18rem] overflow-hidden bg-emerald-50 sm:min-h-[22rem] lg:min-h-full">
-                    {getMediaUrl(summary.memoryOfTheDay) ? (
-                      <img
-                        src={getMediaUrl(summary.memoryOfTheDay)}
-                        alt=""
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                      />
-                    ) : null}
+                    <MemoryMedia
+                      src={getMediaUrl(summary.memoryOfTheDay)}
+                      type={getMemoryMediaType(summary.memoryOfTheDay)}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      showPlayOverlay={getMemoryMediaType(summary.memoryOfTheDay) === "video"}
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/30 to-transparent" />
                   </div>
 
@@ -405,6 +414,21 @@ export default function HomePage() {
                         summary.memoryOfTheDay.content ||
                         "A saved moment from your memory collection."}
                     </p>
+                    <div className="mt-6 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                        {formatMoodLabel(getMemoryMood(summary.memoryOfTheDay))}
+                      </span>
+                      {getMemoryTagNames(summary.memoryOfTheDay.tags)
+                        .slice(0, 4)
+                        .map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                    </div>
                   </div>
                 </div>
               </button>
@@ -412,7 +436,7 @@ export default function HomePage() {
               <div className="p-6 sm:p-8">
                 <EmptyState
                   title="No memory of the day yet."
-                  description="Save a memory with an image and I-Nelory will feature it here."
+                  description="Save a memory with a photo or video and I-Nelory will feature it here."
                 />
               </div>
             )}
@@ -476,13 +500,12 @@ export default function HomePage() {
                       className="block w-full text-left"
                     >
                       <div className="relative h-44 overflow-hidden bg-emerald-50">
-                        {getMediaUrl(memory) ? (
-                          <img
-                            src={getMediaUrl(memory)}
-                            alt=""
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          />
-                        ) : null}
+                        <MemoryMedia
+                          src={getMediaUrl(memory)}
+                          type={getMemoryMediaType(memory)}
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                          showPlayOverlay={getMemoryMediaType(memory) === "video"}
+                        />
                         <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur">
                           {memory.isFavorite ? "♥" : "♡"}
                         </span>
@@ -494,6 +517,21 @@ export default function HomePage() {
                         <p className="mt-1 text-sm text-slate-500">
                           {formatMemoryDate(memory.memoryDate)}
                         </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            {formatMoodLabel(getMemoryMood(memory))}
+                          </span>
+                          {getMemoryTagNames(memory.tags)
+                            .slice(0, 2)
+                            .map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                        </div>
                       </div>
                     </button>
                   </motion.article>
@@ -662,13 +700,12 @@ export default function HomePage() {
                       className="group grid gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-3 transition duration-300 hover:bg-white hover:shadow-lg hover:shadow-slate-950/10 sm:grid-cols-[6.5rem_1fr]"
                     >
                       <div className="h-28 overflow-hidden rounded-2xl bg-emerald-50 sm:h-full">
-                        {getMediaUrl(memory) ? (
-                          <img
-                            src={getMediaUrl(memory)}
-                            alt=""
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          />
-                        ) : null}
+                        <MemoryMedia
+                          src={getMediaUrl(memory)}
+                          type={getMemoryMediaType(memory)}
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                          showPlayOverlay={getMemoryMediaType(memory) === "video"}
+                        />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
@@ -680,6 +717,21 @@ export default function HomePage() {
                         <p className="mt-1 text-sm text-slate-500">
                           {formatMemoryDate(memory.memoryDate)}
                         </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            {formatMoodLabel(getMemoryMood(memory))}
+                          </span>
+                          {getMemoryTagNames(memory.tags)
+                            .slice(0, 2)
+                            .map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                        </div>
                         <button
                           type="button"
                           onClick={openMemory}

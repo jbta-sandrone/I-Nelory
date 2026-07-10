@@ -8,14 +8,17 @@ const imageMimeTypes = new Set([
   "image/gif",
 ]);
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
+
 const uploadMemoryImage = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: MAX_VIDEO_SIZE,
   },
   fileFilter: (_req, file, callback) => {
-    if (!imageMimeTypes.has(file.mimetype)) {
-      callback(new Error("Only image uploads are supported for now"));
+    if (!file.mimetype.startsWith("image/") && !file.mimetype.startsWith("video/")) {
+      callback(new Error("Only image or video uploads are supported"));
       return;
     }
 
@@ -61,8 +64,21 @@ export const uploadMemoryImageMiddleware = (
   uploadMemoryImage(req, res, (error) => {
     if (error) {
       return res.status(400).json({
-        message:
-          error instanceof Error ? error.message : "Failed to upload image",
+        message: error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE"
+          ? "Videos must be 50 MB or smaller, and images must be 5 MB or smaller"
+          : error instanceof Error ? error.message : "Failed to upload media",
+      });
+    }
+
+    if (req.file?.mimetype.startsWith("image/") && req.file.size > MAX_IMAGE_SIZE) {
+      return res.status(400).json({
+        message: "Images must be 5 MB or smaller",
+      });
+    }
+
+    if (req.file?.mimetype.startsWith("video/") && req.file.size > MAX_VIDEO_SIZE) {
+      return res.status(400).json({
+        message: "Videos must be 50 MB or smaller",
       });
     }
 

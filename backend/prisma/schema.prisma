@@ -12,11 +12,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum MediaType {
-  IMAGE
-  VIDEO
-}
-
 enum NotificationType {
   INFO
   SUCCESS
@@ -69,13 +64,19 @@ model EmailVerification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+
 model Memory {
   id          String   @id @default(uuid())
   title       String
   description String?
   mediaUrl    String?
   mediaPublicId String?
-  mediaType   MediaType?
+  mediaType MediaType? @default(IMAGE)
   tags        Tag[]
   memoryDate  DateTime?
   location    String?

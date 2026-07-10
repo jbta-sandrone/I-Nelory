@@ -13,7 +13,7 @@ type ApiMemory = {
   title: string;
   description: string | null;
   mediaUrl: string | null;
-  mediaType: string | null;
+  mediaType: "image" | "video" | null;
   memoryDate: string | null;
   location: string | null;
   isFavorite: boolean;

@@ -26,6 +26,7 @@ type Album = {
 type ApiAlbumMemory = {
   id: string;
   mediaUrl?: string | null;
+  mediaType?: string | null;
   createdAt: string;
 };
 
@@ -118,7 +119,8 @@ function isPresentString(value: string | undefined): value is string {
 function mapApiAlbum(album: ApiAlbum): Album {
   const thumbnails =
     album.memories
-      ?.map((memory) => memory.mediaUrl?.trim())
+      ?.filter((memory) => memory.mediaType?.toLowerCase() !== "video")
+      .map((memory) => memory.mediaUrl?.trim())
       .filter(isPresentString)
       .slice(0, 3) ?? [];
   const memoryCount = album._count?.memories ?? thumbnails.length;

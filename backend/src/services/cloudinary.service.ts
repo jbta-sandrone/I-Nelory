@@ -1,5 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
-import type { UploadApiResponse } from "cloudinary";
+import type { UploadApiOptions, UploadApiResponse } from "cloudinary";
 
 let configured = false;
 
@@ -51,30 +51,67 @@ const uploadImage = async (
   });
 };
 
-const deleteImage = async (publicId: string) => {
+const uploadMedia = async (
+  file: Express.Multer.File,
+  folder: string,
+  resourceType: UploadApiOptions["resource_type"] = "auto"
+): Promise<UploadApiResponse> => {
+  configureCloudinary();
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: resourceType,
+      },
+      (error, result) => {
+        if (error || !result) {
+          reject(error ?? new Error("Cloudinary upload failed"));
+          return;
+        }
+
+        resolve(result);
+      }
+    );
+
+    uploadStream.end(file.buffer);
+  });
+};
+
+const deleteMedia = async (
+  publicId: string,
+  resourceType: "image" | "video" = "image"
+) => {
   configureCloudinary();
 
   const result = (await cloudinary.uploader.destroy(publicId, {
-    resource_type: "image",
+    resource_type: resourceType,
   })) as { result?: string };
 
   if (result.result !== "ok") {
     throw new Error(
       result.result === "not found"
-        ? "Cloudinary image was not found"
-        : "Failed to delete image from Cloudinary"
+        ? "Cloudinary media was not found"
+        : "Failed to delete media from Cloudinary"
     );
   }
 
   return result;
 };
 
-export const uploadMemoryImage = async (file: Express.Multer.File) => {
-  return uploadImage(file, "i-nelory/memories");
+const deleteImage = async (publicId: string) => {
+  return deleteMedia(publicId, "image");
 };
 
-export const deleteMemoryImage = async (publicId: string) => {
-  return deleteImage(publicId);
+export const uploadMemoryImage = async (file: Express.Multer.File) => {
+  return uploadMedia(file, "i-nelory/memories", "auto");
+};
+
+export const deleteMemoryImage = async (
+  publicId: string,
+  resourceType: "image" | "video" = "image"
+) => {
+  return deleteMedia(publicId, resourceType);
 };
 
 export const uploadAlbumCover = async (file: Express.Multer.File) => {

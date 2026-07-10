@@ -1,3 +1,5 @@
+import type { ApiTag } from "../utils/memoryMetadata";
+
 const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const API_URL = rawApiUrl.replace(/\/$/, "");
 const API_BASE_URL = API_URL.endsWith("/api") ? API_URL : `${API_URL}/api`;
@@ -8,8 +10,11 @@ export type DashboardMemory = {
   description?: string | null;
   content?: string | null;
   mediaUrl?: string | null;
+  mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
   imageUrl?: string | null;
   memoryDate?: string | Date | null;
+  location?: string | null;
+  tags?: ApiTag[];
   createdAt?: string | Date | null;
   isFavorite?: boolean;
   media?: Array<string | { url?: string | null }>;

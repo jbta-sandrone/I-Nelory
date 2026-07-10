@@ -3,10 +3,11 @@ export interface CreateMemoryRequest {
   description?: string;
   mediaUrl?: string;
   mediaPublicId?: string;
-  mediaType?: "IMAGE" | "VIDEO";
+  mediaType?: "image" | "video";
   memoryDate?: string;
   location?: string;
   albumId?: string | null;
+  tags?: string[] | string | null;
 }
 
 export interface UpdateMemoryRequest {
@@ -15,4 +16,5 @@ export interface UpdateMemoryRequest {
   memoryDate?: string | null;
   location?: string | null;
   albumId?: string | null;
+  tags?: string[] | string | null;
 }

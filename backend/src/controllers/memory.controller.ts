@@ -16,6 +16,36 @@ import {
   UpdateMemoryRequest,
 } from "../types/memory.types.js";
 
+function parseRequestTags(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return [];
+  }
+
+  let rawTags: unknown;
+
+  if (Array.isArray(value)) {
+    rawTags = value;
+  } else if (typeof value === "string") {
+    try {
+      rawTags = JSON.parse(value);
+    } catch {
+      throw new Error("Tags must be a JSON array.");
+    }
+  } else {
+    throw new Error("Tags must be an array.");
+  }
+
+  if (!Array.isArray(rawTags)) {
+    throw new Error("Tags must be an array.");
+  }
+
+  return rawTags.map((tag) => String(tag).trim());
+}
+
 export const getMemories = async (req: AuthRequest, res: Response) => {
     const memories = await getUserMemories(req.userId!);
 
@@ -39,9 +69,14 @@ export const createMemory = async (
     res: Response
 ) => {
     try {
+        const data = {
+            ...(req.body as CreateMemoryRequest),
+            tags: parseRequestTags(req.body.tags),
+        };
+
         const memory = await createUserMemory(
             req.userId!,
-            req.body as CreateMemoryRequest,
+            data,
             req.file
         );
 
@@ -78,11 +113,16 @@ export const deleteMemory = async (req: AuthRequest, res: Response) => {
 export const updateMemory = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
+    const data = {
+      ...(req.body as UpdateMemoryRequest),
+      tags: parseRequestTags(req.body.tags),
+    };
 
     const memory = await updateUserMemory(
       req.userId!,
       id,
-      req.body as UpdateMemoryRequest
+      data,
+      req.file
     );
 
     return res.status(200).json({

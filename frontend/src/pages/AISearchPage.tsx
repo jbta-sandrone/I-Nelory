@@ -1,5 +1,7 @@
 import { motion, type Variants } from "framer-motion";
 import { useEffect, useState } from "react";
+import MemoryMedia from "../components/MemoryMedia";
+import { getMemoryTagNames, type ApiTag } from "../utils/memoryMetadata";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -7,11 +9,12 @@ type ApiMemory = {
   id: string;
   title?: string | null;
   description?: string | null;
-  mediaType?: string | null;
+  mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
   mediaUrl?: string | null;
   memoryDate?: string | null;
   createdAt: string;
   location?: string | null;
+  tags?: ApiTag[];
   isFavorite: boolean;
   isArchived: boolean;
   albumId?: string | null;
@@ -24,7 +27,8 @@ type SearchResult = {
   caption: string;
   type: MemoryType;
   location: string;
-  image: string;
+  tags: string[];
+  image: string | null;
   matchedFields: string[];
 };
 
@@ -87,13 +91,13 @@ function getStoredToken() {
 }
 
 function getMemoryType(mediaType?: string | null): MemoryType {
-  const normalizedType = mediaType?.toLowerCase() ?? "";
+  const normalizedType = mediaType?.toUpperCase() ?? "";
 
-  if (normalizedType.includes("video")) {
+  if (normalizedType.includes("VIDEO")) {
     return "Video";
   }
 
-  if (normalizedType.includes("story") || normalizedType.includes("text")) {
+  if (normalizedType.includes("STORY") || normalizedType.includes("TEXT")) {
     return "Story";
   }
 
@@ -125,8 +129,9 @@ function mapApiMemory(memory: ApiMemory): SearchResult {
   const title = memory.title?.trim() || "Untitled memory";
   const description = memory.description?.trim() || "";
   const location = memory.location?.trim() || "Unknown location";
+  const tags = getMemoryTagNames(memory.tags);
   const date = formatMemoryDate(memory.memoryDate, memory.createdAt);
-  const image = memory.mediaUrl?.trim() || "";
+  const image = memory.mediaUrl?.trim() || null;
 
   return {
     id: memory.id,
@@ -135,6 +140,7 @@ function mapApiMemory(memory: ApiMemory): SearchResult {
     caption: description || "No description yet.",
     type,
     location,
+    tags,
     image,
     matchedFields: [],
   };
@@ -561,26 +567,13 @@ export default function AISearchPage() {
                   className="group min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
                 >
                   <div className="h-52 overflow-hidden">
-                    {result.image ? (
-                      result.type === "Video" ? (
-                        <video
-                          src={result.image}
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          muted
-                          playsInline
-                        />
-                      ) : (
-                        <img
-                          src={result.image}
-                          alt=""
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                        />
-                      )
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105">
-                        M
-                      </div>
-                    )}
+                    <MemoryMedia
+                      src={result.image}
+                      type={result.type}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105"
+                      showPlayOverlay={result.type === "Video"}
+                    />
                   </div>
 
                   <div className="space-y-4 p-5">
@@ -605,6 +598,19 @@ export default function AISearchPage() {
                           {result.location}
                         </span>
                       )}
+                      {result.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {result.tags.length > 3 ? (
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                          +{result.tags.length - 3} more
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </motion.article>

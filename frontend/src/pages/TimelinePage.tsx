@@ -1,5 +1,7 @@
 import { motion, type Variants } from "framer-motion";
 import { useEffect, useState } from "react";
+import MemoryMedia from "../components/MemoryMedia";
+import { getMemoryTagNames, type ApiTag } from "../utils/memoryMetadata";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -7,11 +9,12 @@ type ApiMemory = {
   id: string;
   title?: string | null;
   description?: string | null;
-  mediaType?: string | null;
+  mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
   mediaUrl?: string | null;
   memoryDate?: string | null;
   createdAt: string;
   location?: string | null;
+  tags?: ApiTag[];
   isFavorite: boolean;
   isArchived: boolean;
   albumId?: string | null;
@@ -26,6 +29,7 @@ type TimelineMemory = {
   caption: string;
   location: string;
   type: MemoryType;
+  tags: string[];
   image: string | null;
   favorite: boolean;
 };
@@ -105,13 +109,13 @@ function getStoredToken() {
 }
 
 function getMemoryType(mediaType?: string | null): MemoryType {
-  const normalizedType = mediaType?.toLowerCase() ?? "";
+  const normalizedType = mediaType?.toUpperCase() ?? "";
 
-  if (normalizedType.includes("video")) {
+  if (normalizedType.includes("VIDEO")) {
     return "Video";
   }
 
-  if (normalizedType.includes("story") || normalizedType.includes("text")) {
+  if (normalizedType.includes("STORY") || normalizedType.includes("TEXT")) {
     return "Story";
   }
 
@@ -169,6 +173,7 @@ function mapApiMemory(memory: ApiMemory): TimelineMemory {
   const month = getMemoryMonth(memory.memoryDate, memory.createdAt);
   const type = getMemoryType(memory.mediaType);
   const location = memory.location?.trim() || "Unknown location";
+  const tags = getMemoryTagNames(memory.tags);
 
   return {
     id: memory.id,
@@ -179,6 +184,7 @@ function mapApiMemory(memory: ApiMemory): TimelineMemory {
     caption: memory.description?.trim() || "No description yet.",
     location,
     type,
+    tags,
     image: memory.mediaUrl?.trim() || null,
     favorite: memory.isFavorite,
   };
@@ -248,26 +254,13 @@ function TimelineCard({
       className="group min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
     >
       <div className="relative h-56 overflow-hidden">
-        {memory.image ? (
-          memory.type === "Video" ? (
-            <video
-              src={memory.image}
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-              muted
-              playsInline
-            />
-          ) : (
-            <img
-              src={memory.image}
-              alt=""
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-            />
-          )
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105">
-            M
-          </div>
-        )}
+        <MemoryMedia
+          src={memory.image}
+          type={memory.type}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105"
+          showPlayOverlay={memory.type === "Video"}
+        />
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
           <span
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${typeStyles[memory.type]}`}
@@ -296,14 +289,24 @@ function TimelineCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-            {memory.type}
-          </span>
+          {memory.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+            >
+              {tag}
+            </span>
+          ))}
+          {memory.tags.length > 3 ? (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              +{memory.tags.length - 3} more
+            </span>
+          ) : null}
         </div>
 
         <div className="grid gap-3 overflow-hidden rounded-2xl bg-slate-50 p-0 text-sm text-slate-600 opacity-0 transition-all duration-300 group-hover:p-4 group-hover:opacity-100 sm:grid-cols-2">
           <p>
-            <span className="font-semibold text-slate-950">Location:</span>{" "}
+            <span className="font-semibold text-slate-950">Mood:</span>{" "}
             {memory.location}
           </p>
         </div>

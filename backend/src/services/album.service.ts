@@ -10,6 +10,7 @@ const albumListInclude = {
     select: {
       id: true,
       mediaUrl: true,
+      mediaType: true,
       createdAt: true,
     },
     orderBy: {
@@ -119,6 +120,18 @@ export const getUserAlbumById = async (userId: string, albumId: string) => {
         },
         orderBy: {
           createdAt: "desc",
+        },
+        include: {
+          tags: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+            orderBy: {
+              name: "asc",
+            },
+          },
         },
       },
     },

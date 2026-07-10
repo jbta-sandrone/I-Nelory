@@ -1,0 +1,58 @@
+type MemoryMediaProps = {
+  src?: string | null;
+  type?: string | null;
+  alt?: string;
+  className?: string;
+  placeholderClassName?: string;
+  controls?: boolean;
+  muted?: boolean;
+  showPlayOverlay?: boolean;
+  placeholderLabel?: string;
+};
+
+export function isVideoMemory(type?: string | null) {
+  return type?.toUpperCase() === "VIDEO";
+}
+
+export default function MemoryMedia({
+  src,
+  type,
+  alt = "",
+  className = "h-full w-full object-cover",
+  placeholderClassName = "flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700",
+  controls = false,
+  muted = true,
+  showPlayOverlay = false,
+  placeholderLabel = "M",
+}: MemoryMediaProps) {
+  const mediaUrl = src?.trim();
+
+  if (!mediaUrl) {
+    return <div className={placeholderClassName}>{placeholderLabel}</div>;
+  }
+
+  if (isVideoMemory(type)) {
+    return (
+      <>
+        <video
+          src={mediaUrl}
+          className={className}
+          muted={muted}
+          controls={controls}
+          playsInline
+          preload="metadata"
+        />
+        {showPlayOverlay && !controls ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-emerald-700 text-xl text-white shadow-lg shadow-emerald-950/25 backdrop-blur-sm transition duration-300 group-hover:scale-105 group-hover:bg-emerald-500"
+          >
+            &#9655;
+          </span>
+        ) : null}
+      </>
+    );
+  }
+
+  return <img src={mediaUrl} alt={alt} className={className} />;
+}
