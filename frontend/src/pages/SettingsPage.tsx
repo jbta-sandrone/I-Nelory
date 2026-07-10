@@ -1,6 +1,10 @@
 import { motion, type Variants } from "framer-motion";
 import { useState } from "react";
 import FeedbackDialog, { type FeedbackState } from "../components/FeedbackDialog";
+import {
+  useAppearance,
+  type ThemePreference,
+} from "../context/AppearanceContext";
 import { useAuth } from "../context/AuthContext";
 import {
   changePassword,
@@ -11,7 +15,6 @@ import {
 } from "../services/auth";
 
 type ToggleKey =
-  | "compactMode"
   | "memoryReminders"
   | "onThisDay"
   | "emailNotifications"
@@ -59,6 +62,12 @@ const storageItems = [
 const sessions = [
   { device: "Windows laptop", location: "Manila, PH", active: "Active now" },
   { device: "Mobile browser", location: "Quezon City, PH", active: "2 days ago" },
+];
+
+const themeOptions: Array<{ label: string; value: ThemePreference }> = [
+  { label: "Light", value: "light" },
+  { label: "Dark", value: "dark" },
+  { label: "System", value: "system" },
 ];
 
 function cardClasses() {
@@ -142,7 +151,12 @@ function SectionTitle({
 
 export default function SettingsPage() {
   const { user: authUser, setUser } = useAuth();
-  const [theme, setTheme] = useState("Light");
+  const {
+    themePreference,
+    setThemePreference,
+    compactMode,
+    setCompactMode,
+  } = useAppearance();
   const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
   const [usernameForm, setUsernameForm] = useState({ username: authUser?.username ?? "" });
   const [isChangingUsername, setIsChangingUsername] = useState(false);
@@ -158,7 +172,6 @@ export default function SettingsPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
-    compactMode: false,
     memoryReminders: true,
     onThisDay: true,
     emailNotifications: false,
@@ -440,42 +453,29 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm font-semibold text-slate-950">Theme</p>
               <div className="mt-3 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1">
-                {["Light", "Dark", "System"].map((option) => (
+                {themeOptions.map((option) => (
                   <button
-                    key={option}
+                    key={option.value}
                     type="button"
-                    onClick={() => setTheme(option)}
+                    onClick={() => setThemePreference(option.value)}
+                    aria-pressed={themePreference === option.value}
                     className={`rounded-xl px-3 py-2 text-sm font-semibold transition duration-300 ${
-                      theme === option
+                      themePreference === option.value
                         ? "bg-white text-emerald-700 shadow-sm"
                         : "text-slate-500 hover:text-slate-950"
                     }`}
                   >
-                    {option}
+                    {option.label}
                   </button>
                 ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">
-                  Accent color
-                </p>
-                <p className="mt-1 text-sm text-slate-500">Emerald</p>
-              </div>
-              <div className="flex gap-2">
-                <span className="h-8 w-8 rounded-full bg-emerald-50 ring-1 ring-emerald-100" />
-                <span className="h-8 w-8 rounded-full bg-emerald-300" />
-                <span className="h-8 w-8 rounded-full bg-emerald-600" />
               </div>
             </div>
 
             <SettingRow
               title="Compact mode"
               description="Use tighter spacing for denser memory views."
-              checked={toggles.compactMode}
-              onToggle={() => toggleSetting("compactMode")}
+              checked={compactMode}
+              onToggle={() => setCompactMode(!compactMode)}
             />
           </div>
         </motion.section>

@@ -112,7 +112,9 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
               event.stopPropagation();
               onToggleFavorite(memory);
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white"
+            className={`flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:bg-white dark:border-white/10 dark:bg-slate-950/75 dark:hover:bg-slate-900 ${
+              memory.favorite ? "dark:text-emerald-300" : "dark:text-slate-200"
+            }`}
           >
             {memory.favorite ? "\u2665" : "\u2661"}
           </button>

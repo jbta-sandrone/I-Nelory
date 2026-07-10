@@ -702,9 +702,9 @@ export default function HomePage() {
                     <motion.article
                       key={memory.id}
                       variants={fadeUp}
-                      className="group grid gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-3 transition duration-300 hover:bg-white hover:shadow-lg hover:shadow-slate-950/10 sm:grid-cols-[6.5rem_1fr]"
+                      className="roup grid gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-3 transition duration-300 hover:bg-white hover:shadow-lg hover:shadow-slate-950/10 sm:grid-cols-[6.5rem_1fr]"
                     >
-                      <div className="h-28 overflow-hidden rounded-2xl bg-emerald-50 sm:h-full">
+                      <div className="relative h-28 overflow-hidden rounded-2xl bg-emerald-50 sm:h-full">
                         <MemoryMedia
                           src={getMediaUrl(memory)}
                           type={getMemoryMediaType(memory)}

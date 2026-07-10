@@ -66,7 +66,7 @@ export default function ActionTransitionOverlay({
           ))}
 
           <motion.div
-            className="relative w-full max-w-md rounded-[2rem] border border-white/20 bg-white/85 p-7 text-center shadow-2xl shadow-emerald-950/20 backdrop-blur-2xl"
+            className="relative w-full max-w-md rounded-[2rem] border border-white/20 bg-white/85 p-7 text-center shadow-2xl shadow-emerald-950/20 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100"
             initial={{ opacity: 0, scale: 0.94, y: 18 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 18 }}
@@ -74,25 +74,25 @@ export default function ActionTransitionOverlay({
           >
             <div className="relative mx-auto h-36 w-44">
               <motion.div
-                className="absolute left-3 top-8 h-24 w-20 rounded-2xl border border-white bg-white p-2 shadow-xl shadow-slate-950/15"
+                className="absolute left-3 top-8 h-24 w-20 rounded-2xl border border-white bg-white p-2 shadow-xl shadow-slate-950/15 dark:border-slate-700 dark:bg-slate-800"
                 animate={{ y: [0, -9, 0], rotate: [-8, -4, -8] }}
                 transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
               >
-                <div className="h-full rounded-xl bg-gradient-to-br from-emerald-100 via-white to-slate-100" />
+                <div className="h-full rounded-xl bg-gradient-to-br from-emerald-100 via-white to-slate-100 dark:from-emerald-950/70 dark:via-slate-800 dark:to-slate-700" />
               </motion.div>
               <motion.div
-                className="absolute left-16 top-3 h-28 w-24 rounded-2xl border border-white bg-white p-2 shadow-2xl shadow-slate-950/20"
+                className="absolute left-16 top-3 h-28 w-24 rounded-2xl border border-white bg-white p-2 shadow-2xl shadow-slate-950/20 dark:border-slate-700 dark:bg-slate-800"
                 animate={{ y: [0, 7, 0], rotate: [2, -2, 2] }}
                 transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut" }}
               >
-                <div className="h-full rounded-xl bg-[linear-gradient(135deg,#d1fae5_0%,#ffffff_48%,#99f6e4_100%)]" />
+                <div className="h-full rounded-xl bg-[linear-gradient(135deg,#d1fae5_0%,#ffffff_48%,#99f6e4_100%)] dark:bg-[linear-gradient(135deg,rgba(6,95,70,0.65)_0%,#1e293b_48%,rgba(20,184,166,0.35)_100%)]" />
               </motion.div>
               <motion.div
-                className="absolute right-2 top-12 h-24 w-20 rounded-2xl border border-white bg-white p-2 shadow-xl shadow-slate-950/15"
+                className="absolute right-2 top-12 h-24 w-20 rounded-2xl border border-white bg-white p-2 shadow-xl shadow-slate-950/15 dark:border-slate-700 dark:bg-slate-800"
                 animate={{ y: [0, -6, 0], rotate: [8, 4, 8] }}
                 transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
               >
-                <div className="h-full rounded-xl bg-gradient-to-br from-slate-100 via-white to-emerald-100" />
+                <div className="h-full rounded-xl bg-gradient-to-br from-slate-100 via-white to-emerald-100 dark:from-slate-700 dark:via-slate-800 dark:to-emerald-950/70" />
               </motion.div>
               <motion.div
                 className="absolute bottom-5 left-1/2 h-px w-36 -translate-x-1/2 bg-emerald-300/70"
@@ -116,13 +116,13 @@ export default function ActionTransitionOverlay({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
-                className="mt-3 text-xl font-semibold tracking-tight text-slate-950"
+                className="mt-3 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100"
               >
                 {title ?? messages[messageIndex]}
               </motion.h2>
             </AnimatePresence>
             {subtitle ? (
-              <p className="mt-2 text-sm leading-6 text-slate-500">
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">
                 {subtitle}
               </p>
             ) : null}

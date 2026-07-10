@@ -642,7 +642,7 @@ export default function Dashboard() {
                   setAvatarOpen((open) => !open);
                   setNotificationOpen(false);
                 }}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-transparent bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 dark:border-white/20 dark:bg-white/90 dark:text-slate-950 dark:hover:bg-white"
               >
                 {avatarInitials}
               </button>

@@ -259,7 +259,7 @@ function TimelineCard({
           type={memory.type}
           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           placeholderClassName="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-4xl font-semibold text-emerald-700 transition duration-500 group-hover:scale-105"
-          showPlayOverlay={memory.type === "Video"}
+          showPlayOverlay={false}
         />
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
           <span

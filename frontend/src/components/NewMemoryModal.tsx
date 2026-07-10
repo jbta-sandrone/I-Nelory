@@ -758,8 +758,8 @@ export default function NewMemoryModal({
               </div>
 
               <div className="mt-7 grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
-                <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5">
-                  <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border border-white bg-white/80 p-5 text-center transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-emerald-950/5">
+                <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5 dark:border-emerald-800/60 dark:bg-slate-900/70">
+                  <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.25rem] border border-white bg-white/80 p-5 text-center transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-emerald-950/5 dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-800">
                     <input
                       name="image"
                       type="file"

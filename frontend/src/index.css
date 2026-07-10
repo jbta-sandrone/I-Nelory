@@ -1,15 +1,259 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   background: #ffffff;
+  color: #020617;
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
+}
+
+.dark body {
+  background: #020617;
+  color: #e2e8f0;
 }
 
 ::selection {
   background: rgba(16, 185, 129, 0.16);
+}
+
+.dark ::selection {
+  background: rgba(16, 185, 129, 0.28);
+}
+
+.dark .bg-white {
+  background-color: #0f172a !important;
+}
+.dark [class~="bg-white/90"]:hover {
+  background-color: #1e293b !important;
+}
+.dark [class~="bg-white/90"] {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+}
+
+
+.dark .bg-slate-50,
+.dark [class~="bg-slate-50/70"],
+.dark [class~="bg-slate-50/85"] {
+  background-color: rgba(2, 6, 23, 0.78) !important;
+}
+
+.dark .bg-slate-100 {
+  background-color: #1e293b !important;
+}
+
+.dark .bg-slate-200 {
+  background-color: #334155 !important;
+}
+
+.dark .bg-emerald-50,
+.dark [class~="bg-emerald-50/70"] {
+  background-color: rgba(6, 95, 70, 0.28) !important;
+}
+
+.dark .bg-emerald-100,
+.dark [class~="bg-emerald-100/70"] {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+.dark .play-button {
+  background-color: rgba(32, 150, 106, 0.9) !important;
+}
+.dark .personal {
+  background-color: #1e293b !important;
+}
+
+.dark .landing-card:hover {
+  background-color: rgba(15, 23, 42, 0.78) !important;
+}
+.dark .returned {
+  background-color: red !important;
+}
+
+
+.dark .bg-red-50,
+.dark .bg-rose-50 {
+  background-color: rgba(127, 29, 29, 0.28) !important;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark [class~="border-slate-200/80"] {
+  border-color: #334155 !important;
+}
+
+.dark .border-emerald-100,
+.dark .border-emerald-200 {
+  border-color: rgba(52, 211, 153, 0.34) !important;
+}
+
+.dark .border-red-100,
+.dark .border-rose-200 {
+  border-color: rgba(248, 113, 113, 0.28) !important;
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-emerald-700,
+.dark .text-emerald-600,
+.dark .text-emerald-800,
+.dark [class~="text-emerald-800/80"] {
+  color: #6ee7b7 !important;
+}
+
+.dark .text-red-600,
+.dark .text-rose-700 {
+  color: #fca5a5 !important;
+}
+
+.dark .placeholder\:text-slate-400::placeholder,
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  background-color: #0f172a;
+  border-color: #34d399;
+}
+
+.dark .hover\:bg-white:hover {
+  background-color: #0f172a !important;
+}
+
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover {
+  background-color: #1e293b !important;
+}
+
+.dark .hover\:bg-emerald-50:hover,
+.dark [class~="hover:bg-emerald-50/70"]:hover {
+  background-color: rgba(6, 95, 70, 0.36) !important;
+}
+
+.dark .hover\:text-slate-950:hover {
+  color: #f8fafc !important;
+}
+
+.dark .hover\:border-slate-300:hover {
+  border-color: #475569 !important;
+}
+
+.dark [class~="backdrop-blur-xl"],
+.dark [class~="backdrop-blur-sm"] {
+  background-color: rgba(2, 6, 23, 0.72);
+}
+
+.dark img,
+.dark video,
+.dark canvas,
+.dark svg {
+  filter: none;
+}
+
+.compact main {
+  padding-bottom: 1rem !important;
+  padding-top: 1rem !important;
+}
+
+.compact main .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-bottom: calc(1rem * var(--tw-space-y-reverse)) !important;
+  margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse))) !important;
+}
+
+.compact main .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)) !important;
+  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))) !important;
+}
+
+.compact main .gap-6 {
+  gap: 1rem !important;
+}
+
+.compact main .gap-4 {
+  gap: 0.75rem !important;
+}
+
+.compact main .gap-3 {
+  gap: 0.625rem !important;
+}
+
+.compact main .p-10 {
+  padding: 1.5rem !important;
+}
+
+.compact main .p-8,
+.compact main .p-7 {
+  padding: 1.25rem !important;
+}
+
+.compact main .p-6,
+.compact main .p-5 {
+  padding: 1rem !important;
+}
+
+.compact main .p-4 {
+  padding: 0.875rem !important;
+}
+
+.compact main .mt-8,
+.compact main .mt-6 {
+  margin-top: 1rem !important;
+}
+
+.compact main .mt-5,
+.compact main .mt-4 {
+  margin-top: 0.75rem !important;
+}
+
+@media (min-width: 640px) {
+  .compact main .sm\:p-8,
+  .compact main .sm\:p-7,
+  .compact main .sm\:p-6 {
+    padding: 1.25rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .compact main .lg\:p-10 {
+    padding: 1.75rem !important;
+  }
 }
 
 @keyframes fade-in-up {

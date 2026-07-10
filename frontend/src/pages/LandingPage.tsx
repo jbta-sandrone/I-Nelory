@@ -580,7 +580,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
           >
             <motion.span
               variants={fadeUp}
-              className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
+              className="personal inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
             >
               Your Personal Digital Memory.
             </motion.span>
@@ -730,7 +730,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                   variants={fadeUp}
                   whileHover={{ y: -8, scale: 1.025 }}
                   transition={{ duration: 0.35 }}
-                  className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm hover:shadow-2xl hover:bg-white/60"
+                  className="landing-card overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm hover:shadow-2xl hover:bg-white/60"
                 >
                   <img
                     src={card.image}
@@ -784,7 +784,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                 variants={fadeUp}
                 whileHover={{ y: -8, scale: 1.025 }}
                 transition={{ duration: 0.35 }}
-                className="rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:bg-white/60"
+                className="landing-card rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:bg-white/60"
               >
                 <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
                   <FeatureIcon name={feature.icon} />
@@ -895,7 +895,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                   variants={fadeUp}
                   whileHover={{ x: 8, scale: 1.01 }}
                   transition={{ duration: 0.35 }}
-                  className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
+                  className="landing-card rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
                 >
                   <div className="flex gap-5">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-semibold text-emerald-700">

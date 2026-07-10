@@ -5,6 +5,33 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>i-nelory</title>
+    <script>
+      (() => {
+        try {
+          const themeKey = "i-nelory.appearance.theme";
+          const compactKey = "i-nelory.appearance.compact";
+          const savedTheme = localStorage.getItem(themeKey);
+          const theme =
+            savedTheme === "light" || savedTheme === "dark" || savedTheme === "system"
+              ? savedTheme
+              : "system";
+          const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const resolvedTheme =
+            theme === "dark" || (theme === "system" && prefersDark)
+              ? "dark"
+              : "light";
+
+          document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
+          document.documentElement.classList.toggle(
+            "compact",
+            localStorage.getItem(compactKey) === "true"
+          );
+          document.documentElement.style.colorScheme = resolvedTheme;
+        } catch {
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -693,10 +693,9 @@ export default function ProfilePage() {
               variants={fadeUp}
               whileHover={{ y: -5, scale: 1.015 }}
               transition={{ duration: 0.3 }}
-              className={`min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 text-left ${
+              className={`min-w-0 rounded-[1.5rem] border border-slate-200 bg-white/90 p-5 hover:bg-black/5 shadow-sm shadow-slate-950/5 transition duration-300 text-left ${
                 isClickable
-                  ? "cursor-pointer hover:shadow-lg hover:bg-black/8"
-                  : "cursor-default hover:shadow-lg hover:bg-black/8"
+                  
               }`}
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-lg font-semibold text-emerald-700">
@@ -733,7 +732,7 @@ export default function ProfilePage() {
                 variants={fadeUp}
                 whileHover={{ y: -4 }}
                 transition={{ duration: 0.3 }}
-                className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4 transition duration-300 hover:bg-white hover:shadow-md hover:shadow-slate-950/5"
+                className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4 transition duration-300 hover:bg-white hover:shadow-md hover:shadow-slate-950/5 dark:hover:bg-emerald-950/25"
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
                   {detail.label}
@@ -773,7 +772,7 @@ export default function ProfilePage() {
                 <motion.div
                   key={memory.id}
                   variants={fadeUp}
-                  className="relative flex gap-4 rounded-[1.25rem] p-3 transition duration-300 hover:bg-slate-50"
+                  className="relative flex gap-4 rounded-[1.25rem] p-3 transition duration-300 hover:bg-slate-50 dark:hover:bg-emerald-950/25"
                 >
                   <div className="flex flex-col items-center">
                     <span className="mt-1 h-3 w-3 rounded-full bg-emerald-500" />
@@ -823,7 +822,7 @@ export default function ProfilePage() {
             variants={fadeUp}
             whileHover={{ y: -6, scale: 1.01 }}
             transition={{ duration: 0.35 }}
-            className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+            className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10 dark:hover:bg-emerald-950/25"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-lg font-semibold text-emerald-700">
               {insight.icon}
@@ -891,8 +890,8 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="mt-7 grid gap-5 md:grid-cols-[0.8fr_1.2fr]">
-                  <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5">
-                    <div className="flex min-h-56 flex-col items-center justify-center rounded-[1.25rem] border border-white bg-white/80 p-5 text-center">
+                  <div className="rounded-[1.5rem] border border-dashed border-emerald-200 bg-emerald-50/60 p-5 dark:border-emerald-800/60 dark:bg-slate-900/70">
+                    <div className="flex min-h-56 flex-col items-center justify-center rounded-[1.25rem] border border-white bg-white/80 p-5 text-center dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300">
                       <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] overflow-hidden bg-slate-950 text-2xl font-semibold text-white shadow-lg shadow-slate-950/15">
                         {avatarPreview ? (
                           <img
@@ -967,7 +966,7 @@ export default function ProfilePage() {
                         />
                         <label
                           htmlFor="avatar-upload-input"
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm shadow-slate-950/5 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/15"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm shadow-slate-950/5 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/15 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-emerald-950/25 dark:hover:text-emerald-300"
                         >
                           <span className="text-lg">📷</span>
                           <span className="truncate">

@@ -49,7 +49,7 @@ export default function MemoryMedia({
 
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-emerald-600 text-xl text-white shadow-lg shadow-emerald-950/25 backdrop-blur-sm transition duration-300 group-hover:scale-105 group-hover:bg-emerald-700"
+            className="play-button pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-emerald-600/90 text-xl text-white shadow-lg shadow-emerald-950/25 backdrop-blur-sm transition duration-300 group-hover:scale-105 group-hover:bg-emerald-700"
           >
             &#9655;
           </span>
