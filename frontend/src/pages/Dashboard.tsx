@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import NewMemoryModal from "../components/NewMemoryModal";
 import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
+import { useAuth } from "../context/AuthContext";
 import { getStoredAuthToken } from "../services/auth";
 import {
   getNotifications,
@@ -35,6 +36,79 @@ const navItems: Array<{ label: string; icon: NavIconName; to: string }> = [
 ];
 
 const DROPDOWN_NOTIFICATION_LIMIT = 5;
+const MEMORY_FILTER_MODAL_PARAM = "filters";
+
+function HamburgerIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    >
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </svg>
+  );
+}
+
+function FilterIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    >
+      <path d="M4 5h16l-7 8v5l-2 1v-6z" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    >
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  );
+}
+
+function getAvatarInitials(name?: string | null, username?: string | null) {
+  const source = name?.trim() || username?.trim();
+
+  if (!source) {
+    return "IU";
+  }
+
+  const parts = source.split(/\s+/).filter(Boolean);
+
+  if (parts.length > 1) {
+    const firstInitial = parts[0]?.charAt(0) ?? "";
+    const lastInitial = parts[parts.length - 1]?.charAt(0) ?? "";
+    return `${firstInitial}${lastInitial}`.toUpperCase();
+  }
+
+  return source.slice(0, 2).toUpperCase();
+}
 
 function NavIcon({ name }: { name: NavIconName }) {
   const iconProps = {
@@ -121,6 +195,8 @@ function NavIcon({ name }: { name: NavIconName }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user: authUser } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -131,6 +207,17 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [topbarSearch, setTopbarSearch] = useState("");
+  const [searchEdited, setSearchEdited] = useState(false);
+  const displayName =
+    authUser?.fullName?.trim() ||
+    authUser?.username?.trim() ||
+    "I-Nelory User";
+  const displayEmail = authUser?.email || "No email available";
+  const avatarInitials = getAvatarInitials(
+    authUser?.fullName,
+    authUser?.username,
+  );
 
   const loadDropdownNotifications = async () => {
     const token = getStoredAuthToken();
@@ -176,6 +263,47 @@ export default function Dashboard() {
     }
   }, [notificationOpen]);
 
+  useEffect(() => {
+    if (location.pathname === "/dashboard/memories") {
+      setTopbarSearch(new URLSearchParams(location.search).get("q") ?? "");
+    } else {
+      setTopbarSearch("");
+    }
+
+    setSearchEdited(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!searchEdited) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const params =
+        location.pathname === "/dashboard/memories"
+          ? new URLSearchParams(location.search)
+          : new URLSearchParams();
+
+      const nextSearch = topbarSearch.trim();
+
+      if (nextSearch) {
+        params.set("q", nextSearch);
+      } else {
+        params.delete("q");
+      }
+
+      params.delete(MEMORY_FILTER_MODAL_PARAM);
+
+      const search = params.toString();
+      navigate({
+        pathname: "/dashboard/memories",
+        search: search ? `?${search}` : "",
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [location.pathname, location.search, navigate, searchEdited, topbarSearch]);
+
   const handleNotificationClick = async (notification: NotificationItem) => {
     setNotificationOpen(false);
 
@@ -212,6 +340,24 @@ export default function Dashboard() {
 
   const openNewMemoryModal = () => {
     setNewMemoryOpen(true);
+  };
+
+  const openMemoryFilters = () => {
+    const params =
+      location.pathname === "/dashboard/memories"
+        ? new URLSearchParams(location.search)
+        : new URLSearchParams();
+
+    if (topbarSearch.trim()) {
+      params.set("q", topbarSearch.trim());
+    }
+
+    params.set(MEMORY_FILTER_MODAL_PARAM, "1");
+
+    navigate({
+      pathname: "/dashboard/memories",
+      search: `?${params.toString()}`,
+    });
   };
 
   const confirmLogout = () => {
@@ -338,22 +484,39 @@ export default function Dashboard() {
         }`}
       >
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-slate-50/85 backdrop-blur-xl">
-          <div className="flex items-center gap-3 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 px-4 py-4 sm:gap-3 sm:px-6 lg:px-8">
             <button
               type="button"
-              className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 lg:hidden"
+              aria-label="Open menu"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 lg:hidden"
               onClick={() => setSidebarOpen(true)}
             >
-              Menu
+              <HamburgerIcon className="h-5 w-5" />
             </button>
 
             <div className="relative min-w-0 flex-1">
+              <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
-                placeholder="Search memories, albums, places..."
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/20"
+                placeholder="Search memories..."
+                value={topbarSearch}
+                onChange={(event) => {
+                  setTopbarSearch(event.target.value);
+                  setSearchEdited(true);
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/20"
               />
             </div>
+
+            <button
+              type="button"
+              aria-label="Filter memories"
+              onClick={openMemoryFilters}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-emerald-100 bg-white text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 sm:w-auto sm:px-5"
+            >
+              <FilterIcon className="h-5 w-5" />
+              <span className="hidden sm:inline">Filter</span>
+            </button>
 
             <button
               type="button"
@@ -481,7 +644,7 @@ export default function Dashboard() {
                 }}
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
               >
-                IN
+                {avatarInitials}
               </button>
 
               <AnimatePresence>
@@ -495,10 +658,10 @@ export default function Dashboard() {
                   >
                     <div className="border-b border-slate-100 px-3 py-3">
                       <p className="text-sm font-semibold text-slate-950">
-                        Jonel Bryan Ablog
+                        {displayName}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        jonel@example.com
+                        {displayEmail}
                       </p>
                     </div>
                     <button
@@ -574,7 +737,7 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-semibold text-emerald-700">
-                    IN
+                    {avatarInitials}
                   </div>
                   <h2 className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">
                     Are you sure you want to log out?

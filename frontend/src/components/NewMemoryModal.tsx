@@ -25,6 +25,7 @@ export type ApiMemory = {
   mediaPublicId?: string | null;
   mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
   memoryDate?: string | null;
+  mood?: string | null;
   location?: string | null;
   isFavorite: boolean;
   isArchived: boolean;

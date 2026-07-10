@@ -18,6 +18,7 @@ type ApiMemory = {
   location: string | null;
   isFavorite: boolean;
   isArchived: boolean;
+  tags?: Array<string | { id?: string; name: string }>;
   createdAt: string;
 };
 
@@ -32,6 +33,7 @@ type StatsType = {
   albums: number;
   favorites: number;
   archived: number;
+  uniqueTags: number;
 };
 
 function generateAvatarInitials(fullName: string, email: string): string {
@@ -93,6 +95,23 @@ function inputClasses() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/15";
 }
 
+function countUniqueTags(memories: ApiMemory[]) {
+  const tagNames = new Set<string>();
+
+  for (const memory of memories) {
+    for (const tag of memory.tags ?? []) {
+      const tagName = typeof tag === "string" ? tag : tag.name;
+      const normalizedTagName = tagName.trim().toLowerCase();
+
+      if (normalizedTagName) {
+        tagNames.add(normalizedTagName);
+      }
+    }
+  }
+
+  return tagNames.size;
+}
+
 function FormField({
   label,
   children,
@@ -117,6 +136,7 @@ export default function ProfilePage() {
     albums: 0,
     favorites: 0,
     archived: 0,
+    uniqueTags: 0,
   });
   const [allMemories, setAllMemories] = useState<ApiMemory[]>([]);
   const [recentMemories, setRecentMemories] = useState<ApiMemory[]>([]);
@@ -252,12 +272,14 @@ export default function ProfilePage() {
 
         // Calculate stats
         const favorites = normalMemories.filter((m) => m.isFavorite).length;
+        const uniqueTags = countUniqueTags([...normalMemories, ...archived]);
 
         setStats({
           totalMemories: normalMemories.length,
           albums: albums.length,
           favorites,
           archived: archived.length,
+          uniqueTags,
         });
 
         // Set recent memories (latest 4 by createdAt)
@@ -498,13 +520,22 @@ export default function ProfilePage() {
       route: "/dashboard/archive",
     },
     {
-      label: "Stories",
-      value: "Coming soon",
+      label: "__removed_stat",
+      value: "0",
       icon: "✎",
       route: null,
     },
-    { label: "Tags Used", value: "Coming soon", icon: "#", route: null },
+    {
+      label: "Unique Tags",
+      value: stats.uniqueTags.toString(),
+      icon: "#",
+      route: "/dashboard/memories",
+    },
   ];
+
+  const visibleStatsList = statsList.filter(
+    (stat) => stat.label !== "__removed_stat",
+  );
 
   return (
     <motion.div
@@ -644,24 +675,28 @@ export default function ProfilePage() {
       {/* Memory Statistics */}
       <motion.section
         variants={staggerContainer}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5"
       >
-        {statsList.map((stat) => {
+        {visibleStatsList.map((stat) => {
           const isClickable = stat.route !== null;
-          const isComingSoon = !isClickable;
 
           return (
             <motion.button
+              type="button"
               key={stat.label}
-              onClick={() => isClickable && navigate(stat.route)}
-              disabled={isComingSoon}
+              onClick={() => {
+                if (stat.route) {
+                  navigate(stat.route);
+                }
+              }}
+              aria-disabled={!isClickable}
               variants={fadeUp}
-              whileHover={isClickable ? { y: -5, scale: 1.015 } : {}}
+              whileHover={{ y: -5, scale: 1.015 }}
               transition={{ duration: 0.3 }}
               className={`min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5 transition duration-300 text-left ${
                 isClickable
                   ? "cursor-pointer hover:shadow-lg hover:bg-black/8"
-                  : "cursor-default opacity-60"
+                  : "cursor-default hover:shadow-lg hover:bg-black/8"
               }`}
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-lg font-semibold text-emerald-700">

@@ -583,12 +583,6 @@ export default function FavoritesPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="inline-flex w-full items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25 sm:w-auto"
-        >
-          + New Memory
-        </button>
       </motion.section>
 
       {favoriteErrorMessage ? (

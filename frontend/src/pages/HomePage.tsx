@@ -156,7 +156,11 @@ function getMediaUrl(memory?: DashboardMemory | null) {
 }
 
 function getMemoryMediaType(memory?: DashboardMemory | null) {
-  return memory?.mediaType?.toUpperCase() === "VIDEO" ? "video" : "image";
+  return memory?.mediaType?.trim().toUpperCase() === "VIDEO" ? "video" : "image";
+}
+
+function isVideoDashboardMemory(memory?: DashboardMemory | null) {
+  return getMemoryMediaType(memory) === "video";
 }
 
 function getAlbumCoverUrl(album?: DashboardAlbum | null) {
@@ -391,10 +395,11 @@ export default function HomePage() {
                 <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="relative min-h-[18rem] overflow-hidden bg-emerald-50 sm:min-h-[22rem] lg:min-h-full">
                     <MemoryMedia
+                      key={`${summary.memoryOfTheDay.id}-${summary.memoryOfTheDay.mediaType ?? "image"}-${getMediaUrl(summary.memoryOfTheDay)}`}
                       src={getMediaUrl(summary.memoryOfTheDay)}
                       type={getMemoryMediaType(summary.memoryOfTheDay)}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                      showPlayOverlay={getMemoryMediaType(summary.memoryOfTheDay) === "video"}
+                      showPlayOverlay={isVideoDashboardMemory(summary.memoryOfTheDay)}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/30 to-transparent" />
                   </div>
@@ -504,7 +509,7 @@ export default function HomePage() {
                           src={getMediaUrl(memory)}
                           type={getMemoryMediaType(memory)}
                           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          showPlayOverlay={getMemoryMediaType(memory) === "video"}
+                          showPlayOverlay={isVideoDashboardMemory(memory)}
                         />
                         <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm text-emerald-700 shadow-sm backdrop-blur">
                           {memory.isFavorite ? "♥" : "♡"}
@@ -704,7 +709,7 @@ export default function HomePage() {
                           src={getMediaUrl(memory)}
                           type={getMemoryMediaType(memory)}
                           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                          showPlayOverlay={getMemoryMediaType(memory) === "video"}
+                          showPlayOverlay={isVideoDashboardMemory(memory)}
                         />
                       </div>
                       <div className="min-w-0">

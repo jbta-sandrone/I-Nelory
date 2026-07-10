@@ -14,6 +14,10 @@ export function isVideoMemory(type?: string | null) {
   return type?.toUpperCase() === "VIDEO";
 }
 
+function getVideoThumbnailUrl(url: string) {
+  return url.replace(/\.[^/.]+$/, ".jpg");
+}
+
 export default function MemoryMedia({
   src,
   type,
@@ -26,31 +30,42 @@ export default function MemoryMedia({
   placeholderLabel = "M",
 }: MemoryMediaProps) {
   const mediaUrl = src?.trim();
+  const isVideo = isVideoMemory(type);
+  const shouldShowPlayOverlay = isVideo && showPlayOverlay && !controls;
 
   if (!mediaUrl) {
     return <div className={placeholderClassName}>{placeholderLabel}</div>;
   }
 
-  if (isVideoMemory(type)) {
-    return (
-      <>
-        <video
-          src={mediaUrl}
-          className={className}
-          muted={muted}
-          controls={controls}
-          playsInline
-          preload="metadata"
-        />
-        {showPlayOverlay && !controls ? (
+  if (isVideo) {
+    if (shouldShowPlayOverlay) {
+      return (
+        <>
+          <img
+            src={getVideoThumbnailUrl(mediaUrl)}
+            alt={alt}
+            className={className}
+          />
+
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-emerald-700 text-xl text-white shadow-lg shadow-emerald-950/25 backdrop-blur-sm transition duration-300 group-hover:scale-105 group-hover:bg-emerald-500"
+            className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-emerald-600 text-xl text-white shadow-lg shadow-emerald-950/25 backdrop-blur-sm transition duration-300 group-hover:scale-105 group-hover:bg-emerald-700"
           >
             &#9655;
           </span>
-        ) : null}
-      </>
+        </>
+      );
+    }
+
+    return (
+      <video
+        src={mediaUrl}
+        className={className}
+        muted={muted}
+        controls={controls}
+        playsInline
+        preload="metadata"
+      />
     );
   }
 

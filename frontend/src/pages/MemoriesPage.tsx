@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
 import {
   startActionTransition,
@@ -38,6 +39,8 @@ type Memory = {
   image: string | null;
   favorite: boolean;
   albumId: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type MemoriesResponse = {
@@ -48,6 +51,34 @@ type MemoriesResponse = {
 type MemoryResponse = {
   message?: string;
   memory?: ApiMemory;
+};
+
+type ApiAlbum = {
+  id: string;
+  name: string;
+};
+
+type AlbumsResponse = {
+  message: string;
+  albums: ApiAlbum[];
+};
+
+type MemoryFilters = {
+  date: string;
+  from: string;
+  to: string;
+  mood: string;
+  tags: string[];
+  albumId: string;
+  mediaType: string;
+  favorite: boolean;
+  sort: string;
+};
+
+type ActiveFilterChip = {
+  key: string;
+  label: string;
+  value?: string;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -77,10 +108,41 @@ const staggerContainer: Variants = {
   },
 };
 
-const moods = [
-  "All moods",
-  ...MOOD_OPTIONS.map((mood) => mood.name),
-];
+const FILTER_MODAL_PARAM = "filters";
+const DEFAULT_FILTERS: MemoryFilters = {
+  date: "",
+  from: "",
+  to: "",
+  mood: "",
+  tags: [],
+  albumId: "",
+  mediaType: "ALL",
+  favorite: false,
+  sort: "newest",
+};
+
+const dateFilterLabels: Record<string, string> = {
+  today: "Today",
+  week: "This Week",
+  month: "This Month",
+  year: "This Year",
+  custom: "Custom Range",
+};
+
+const mediaTypeLabels: Record<string, string> = {
+  ALL: "All",
+  IMAGE: "Images",
+  VIDEO: "Videos",
+};
+
+const sortLabels: Record<string, string> = {
+  newest: "Newest",
+  oldest: "Oldest",
+  updated: "Recently Updated",
+  memoryDate: "Memory Date",
+  titleAsc: "Title A-Z",
+  titleDesc: "Title Z-A",
+};
 
 function inputClasses() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/15";
@@ -128,6 +190,7 @@ function formatMemoryDate(memoryDate?: string | null) {
 
 function mapApiMemory(memory: ApiMemory): Memory {
   const type = getMemoryType(memory.mediaType);
+  const mood = memory.mood?.trim() || memory.location?.trim();
   const location = memory.location?.trim();
   const tags = getMemoryTagNames(memory.tags);
 
@@ -138,7 +201,7 @@ function mapApiMemory(memory: ApiMemory): Memory {
     caption: memory.description?.trim() || "No description yet.",
     date: formatMemoryDate(memory.memoryDate),
     memoryDate: memory.memoryDate ?? null,
-    mood: location || "Neutral",
+    mood: mood || "Neutral",
     location: location ?? null,
     type,
     mediaType: memory.mediaType ?? null,
@@ -147,13 +210,175 @@ function mapApiMemory(memory: ApiMemory): Memory {
     image: memory.mediaUrl?.trim() || null,
     favorite: memory.isFavorite,
     albumId: memory.albumId ?? null,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
   };
 }
 
+function getFiltersFromSearchParams(searchParams: URLSearchParams): MemoryFilters {
+  const date = searchParams.get("date") ?? "";
+  const mediaType = (searchParams.get("mediaType") ?? "ALL").toUpperCase();
+  const sort = searchParams.get("sort") ?? "newest";
+
+  return {
+    date: Object.keys(dateFilterLabels).includes(date) ? date : "",
+    from: searchParams.get("from") ?? "",
+    to: searchParams.get("to") ?? "",
+    mood: searchParams.get("mood") ?? "",
+    tags: (searchParams.get("tags") ?? "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    albumId: searchParams.get("albumId") ?? "",
+    mediaType: ["ALL", "IMAGE", "VIDEO"].includes(mediaType)
+      ? mediaType
+      : "ALL",
+    favorite: searchParams.get("favorite") === "true",
+    sort: Object.keys(sortLabels).includes(sort) ? sort : "newest",
+  };
+}
+
+function writeFiltersToSearchParams(
+  searchParams: URLSearchParams,
+  filters: MemoryFilters,
+) {
+  const nextParams = new URLSearchParams(searchParams);
+
+  nextParams.delete(FILTER_MODAL_PARAM);
+
+  for (const key of [
+    "date",
+    "from",
+    "to",
+    "mood",
+    "tags",
+    "albumId",
+    "mediaType",
+    "favorite",
+    "sort",
+  ]) {
+    nextParams.delete(key);
+  }
+
+  if (filters.date) {
+    nextParams.set("date", filters.date);
+  }
+
+  if (filters.date === "custom") {
+    if (filters.from) {
+      nextParams.set("from", filters.from);
+    }
+
+    if (filters.to) {
+      nextParams.set("to", filters.to);
+    }
+  }
+
+  if (filters.mood) {
+    nextParams.set("mood", filters.mood);
+  }
+
+  if (filters.tags.length > 0) {
+    nextParams.set("tags", filters.tags.join(","));
+  }
+
+  if (filters.albumId) {
+    nextParams.set("albumId", filters.albumId);
+  }
+
+  if (filters.mediaType !== "ALL") {
+    nextParams.set("mediaType", filters.mediaType);
+  }
+
+  if (filters.favorite) {
+    nextParams.set("favorite", "true");
+  }
+
+  if (filters.sort !== "newest") {
+    nextParams.set("sort", filters.sort);
+  }
+
+  return nextParams;
+}
+
+function getDateForFiltering(memory: Memory) {
+  return new Date(memory.memoryDate || memory.createdAt);
+}
+
+function isSameDate(firstDate: Date, secondDate: Date) {
+  return (
+    firstDate.getFullYear() === secondDate.getFullYear() &&
+    firstDate.getMonth() === secondDate.getMonth() &&
+    firstDate.getDate() === secondDate.getDate()
+  );
+}
+
+function isInDateFilter(memory: Memory, filters: MemoryFilters) {
+  if (!filters.date) {
+    return true;
+  }
+
+  const memoryDate = getDateForFiltering(memory);
+
+  if (Number.isNaN(memoryDate.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+
+  if (filters.date === "today") {
+    return isSameDate(memoryDate, today);
+  }
+
+  if (filters.date === "week") {
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    return memoryDate >= startOfWeek && memoryDate <= today;
+  }
+
+  if (filters.date === "month") {
+    return (
+      memoryDate.getFullYear() === today.getFullYear() &&
+      memoryDate.getMonth() === today.getMonth()
+    );
+  }
+
+  if (filters.date === "year") {
+    return memoryDate.getFullYear() === today.getFullYear();
+  }
+
+  if (filters.date === "custom") {
+    const fromDate = filters.from ? new Date(filters.from) : null;
+    const toDate = filters.to ? new Date(filters.to) : null;
+
+    if (fromDate) {
+      fromDate.setHours(0, 0, 0, 0);
+    }
+
+    if (toDate) {
+      toDate.setHours(23, 59, 59, 999);
+    }
+
+    return (
+      (!fromDate || memoryDate >= fromDate) &&
+      (!toDate || memoryDate <= toDate)
+    );
+  }
+
+  return true;
+}
+
+function compareDates(first?: string | null, second?: string | null) {
+  return new Date(second || 0).getTime() - new Date(first || 0).getTime();
+}
+
 export default function MemoriesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [albums, setAlbums] = useState<ApiAlbum[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [favoriteErrorMessage, setFavoriteErrorMessage] = useState("");
@@ -164,10 +389,34 @@ export default function MemoriesPage() {
   const [memoryToView, setMemoryToView] = useState<Memory | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [draftFilters, setDraftFilters] =
+    useState<MemoryFilters>(DEFAULT_FILTERS);
 
   const showFeedback = useCallback((nextFeedback: FeedbackState) => {
     setFeedback({ type: "success", ...nextFeedback });
   }, []);
+
+  const searchQuery = searchParams.get("q")?.trim() ?? "";
+  const filters = useMemo(
+    () => getFiltersFromSearchParams(searchParams),
+    [searchParams],
+  );
+  const albumNameById = useMemo(
+    () =>
+      albums.reduce<Record<string, string>>((albumNames, album) => {
+        albumNames[album.id] = album.name;
+        return albumNames;
+      }, {}),
+    [albums],
+  );
+  const availableTags = useMemo(
+    () =>
+      Array.from(new Set(memories.flatMap((memory) => memory.tags))).sort(
+        (first, second) => first.localeCompare(second),
+      ),
+    [memories],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -197,6 +446,35 @@ export default function MemoriesPage() {
 
         const data = (await response.json()) as MemoriesResponse;
         setMemories(data.memories.map(mapApiMemory));
+
+        try {
+          const albumsResponse = await fetch(
+            "http://localhost:5000/api/albums",
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              signal: controller.signal,
+            },
+          );
+
+          if (albumsResponse.ok) {
+            const albumsData = (await albumsResponse.json()) as AlbumsResponse;
+            setAlbums(albumsData.albums);
+          } else {
+            setAlbums([]);
+          }
+        } catch (albumError) {
+          if (
+            albumError instanceof DOMException &&
+            albumError.name === "AbortError"
+          ) {
+            throw albumError;
+          }
+
+          setAlbums([]);
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -217,6 +495,209 @@ export default function MemoriesPage() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get(FILTER_MODAL_PARAM) === "1") {
+      setDraftFilters(getFiltersFromSearchParams(searchParams));
+      setIsFilterModalOpen(true);
+    }
+  }, [searchParams]);
+
+  const visibleMemories = useMemo(() => {
+    const normalizedQuery = searchQuery.toLowerCase();
+    const selectedTags = filters.tags.map((tag) => tag.toLowerCase());
+
+    return memories
+      .filter((memory) => {
+        const albumName = albumNameById[memory.albumId ?? ""] ?? "";
+
+        if (normalizedQuery) {
+          const searchableText = [
+            memory.title,
+            memory.description,
+            memory.caption,
+            memory.mood,
+            albumName,
+            ...memory.tags,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          if (!searchableText.includes(normalizedQuery)) {
+            return false;
+          }
+        }
+
+        if (!isInDateFilter(memory, filters)) {
+          return false;
+        }
+
+        if (
+          filters.mood &&
+          memory.mood.toLowerCase() !== filters.mood.toLowerCase()
+        ) {
+          return false;
+        }
+
+        if (
+          selectedTags.length > 0 &&
+          !selectedTags.every((tag) =>
+            memory.tags.some((memoryTag) => memoryTag.toLowerCase() === tag),
+          )
+        ) {
+          return false;
+        }
+
+        if (filters.albumId && memory.albumId !== filters.albumId) {
+          return false;
+        }
+
+        if (
+          filters.mediaType === "VIDEO" &&
+          memory.mediaType?.toUpperCase() !== "VIDEO"
+        ) {
+          return false;
+        }
+
+        if (
+          filters.mediaType === "IMAGE" &&
+          memory.mediaType?.toUpperCase() === "VIDEO"
+        ) {
+          return false;
+        }
+
+        if (filters.favorite && !memory.favorite) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((firstMemory, secondMemory) => {
+        switch (filters.sort) {
+          case "oldest":
+            return compareDates(secondMemory.createdAt, firstMemory.createdAt);
+          case "updated":
+            return compareDates(firstMemory.updatedAt, secondMemory.updatedAt);
+          case "memoryDate":
+            return compareDates(firstMemory.memoryDate, secondMemory.memoryDate);
+          case "titleAsc":
+            return firstMemory.title.localeCompare(secondMemory.title);
+          case "titleDesc":
+            return secondMemory.title.localeCompare(firstMemory.title);
+          case "newest":
+          default:
+            return compareDates(firstMemory.createdAt, secondMemory.createdAt);
+        }
+      });
+  }, [albumNameById, filters, memories, searchQuery]);
+
+  const hasActiveFilters =
+    Boolean(searchQuery) ||
+    Boolean(filters.date) ||
+    Boolean(filters.mood) ||
+    filters.tags.length > 0 ||
+    Boolean(filters.albumId) ||
+    filters.mediaType !== "ALL" ||
+    filters.favorite ||
+    filters.sort !== "newest";
+  const activeFilterChips: ActiveFilterChip[] = [
+    ...(searchQuery
+      ? [{ key: "q", label: `Search: ${searchQuery}` }]
+      : []),
+    ...(filters.date
+      ? [
+          {
+            key: "date",
+            label:
+              filters.date === "custom"
+                ? `Date: ${filters.from || "Any"} to ${filters.to || "Any"}`
+                : `Date: ${dateFilterLabels[filters.date]}`,
+          },
+        ]
+      : []),
+    ...(filters.mood
+      ? [{ key: "mood", label: `Mood: ${filters.mood}` }]
+      : []),
+    ...filters.tags.map((tag) => ({
+      key: "tags",
+      value: tag,
+      label: `Tag: ${tag}`,
+    })),
+    ...(filters.albumId
+      ? [
+          {
+            key: "albumId",
+            label: `Album: ${albumNameById[filters.albumId] ?? "Album"}`,
+          },
+        ]
+      : []),
+    ...(filters.mediaType !== "ALL"
+      ? [
+          {
+            key: "mediaType",
+            label: `Type: ${mediaTypeLabels[filters.mediaType]}`,
+          },
+        ]
+      : []),
+    ...(filters.favorite
+      ? [{ key: "favorite", label: "Favorites only" }]
+      : []),
+    ...(filters.sort !== "newest"
+      ? [{ key: "sort", label: `Sort: ${sortLabels[filters.sort]}` }]
+      : []),
+  ];
+
+  const closeFilterModal = () => {
+    setIsFilterModalOpen(false);
+
+    if (searchParams.get(FILTER_MODAL_PARAM) === "1") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete(FILTER_MODAL_PARAM);
+      setSearchParams(nextParams);
+    }
+  };
+
+  const applyFilters = () => {
+    setSearchParams(writeFiltersToSearchParams(searchParams, draftFilters));
+    setIsFilterModalOpen(false);
+  };
+
+  const clearAllFilters = () => {
+    setSearchParams({});
+    setDraftFilters(DEFAULT_FILTERS);
+    setIsFilterModalOpen(false);
+  };
+
+  const removeFilter = (key: string, value?: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete(FILTER_MODAL_PARAM);
+
+    if (key === "q") {
+      nextParams.delete("q");
+    }
+
+    if (key === "date") {
+      nextParams.delete("date");
+      nextParams.delete("from");
+      nextParams.delete("to");
+    }
+
+    if (key === "tags" && value) {
+      const nextTags = filters.tags.filter((tag) => tag !== value);
+
+      if (nextTags.length > 0) {
+        nextParams.set("tags", nextTags.join(","));
+      } else {
+        nextParams.delete("tags");
+      }
+    }
+
+    if (["mood", "albumId", "mediaType", "favorite", "sort"].includes(key)) {
+      nextParams.delete(key);
+    }
+
+    setSearchParams(nextParams);
+  };
 
   useEffect(() => {
     const handleMemoryCreated = (event: Event) => {
@@ -588,41 +1069,57 @@ export default function MemoriesPage() {
         </button>
       </motion.section>
 
-      {/* Filters/Search Row */}
+      {/* Active Filters */}
       <motion.section
         variants={fadeUp}
         className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:p-5"
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
-          <input
-            type="search"
-            placeholder="Search memories..."
-            className={inputClasses()}
-          />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-950">
+              {visibleMemories.length.toLocaleString()} matching memories
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeFilterChips.length > 0 ? (
+                activeFilterChips.map((chip) => (
+                  <button
+                    key={`${chip.key}-${chip.value ?? chip.label}`}
+                    type="button"
+                    onClick={() => removeFilter(chip.key, chip.value)}
+                    className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-100"
+                  >
+                    {chip.label} x
+                  </button>
+                ))
+              ) : (
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                  All memories
+                </span>
+              )}
+            </div>
+          </div>
 
-          <select aria-label="Filter by mood" className={inputClasses()}>
-            {moods.map((mood) => (
-              <option key={mood}>{mood}</option>
-            ))}
-          </select>
-
-          <select aria-label="Filter by type" className={inputClasses()}>
-            <option>All types</option>
-            <option>Photos</option>
-            <option>Videos</option>
-            <option>Stories</option>
-          </select>
-
-          <input
-            aria-label="Filter by date"
-            type="date"
-            className={inputClasses()}
-          />
-
-          <select aria-label="Sort memories" className={inputClasses()}>
-            <option>Newest first</option>
-            <option>Oldest first</option>
-          </select>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => {
+                setDraftFilters(filters);
+                setIsFilterModalOpen(true);
+              }}
+              className="rounded-full border border-emerald-100 bg-white px-5 py-3 text-sm font-semibold text-emerald-700 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-50"
+            >
+              Filter
+            </button>
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800"
+              >
+                Clear All
+              </button>
+            ) : null}
+          </div>
         </div>
       </motion.section>
 
@@ -686,12 +1183,34 @@ export default function MemoriesPage() {
             Start preserving your first moment.
           </p>
         </motion.section>
+      ) : visibleMemories.length === 0 ? (
+        <motion.section
+          variants={fadeUp}
+          className="rounded-[2rem] border border-dashed border-emerald-200 bg-white p-10 text-center shadow-sm shadow-slate-950/5"
+        >
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl font-semibold text-emerald-700">
+            M
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold text-slate-950">
+            No memories match.
+          </h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            Try a different search or remove a filter.
+          </p>
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="mt-6 rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700"
+          >
+            Clear Filters
+          </button>
+        </motion.section>
       ) : (
         <motion.section
           variants={staggerContainer}
           className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         >
-          {memories.map((memory) => (
+          {visibleMemories.map((memory) => (
             <MemoryCard
               key={memory.id}
               memory={memory}
@@ -727,6 +1246,286 @@ export default function MemoriesPage() {
         </p>
       </motion.section>
       */}
+
+      <AnimatePresence>
+        {isFilterModalOpen ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/45 px-4 py-6 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeFilterModal}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="memory-filter-title"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.96 }}
+              transition={{ duration: 0.26, ease: easeOut }}
+              className="my-auto flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">
+                    Memory Library
+                  </p>
+                  <h2
+                    id="memory-filter-title"
+                    className="mt-2 text-2xl font-semibold tracking-tight text-slate-950"
+                  >
+                    Filter memories
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close memory filters"
+                  onClick={closeFilterModal}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <div className="grid gap-5 overflow-y-auto p-5 sm:p-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Date
+                    </span>
+                    <select
+                      value={draftFilters.date}
+                      onChange={(event) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          date: event.target.value,
+                        }))
+                      }
+                      className={`${inputClasses()} mt-2`}
+                    >
+                      <option value="">Any date</option>
+                      <option value="today">Today</option>
+                      <option value="week">This Week</option>
+                      <option value="month">This Month</option>
+                      <option value="year">This Year</option>
+                      <option value="custom">Custom Range</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Mood
+                    </span>
+                    <select
+                      value={draftFilters.mood}
+                      onChange={(event) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          mood: event.target.value,
+                        }))
+                      }
+                      className={`${inputClasses()} mt-2`}
+                    >
+                      <option value="">Any mood</option>
+                      {MOOD_OPTIONS.map((mood) => (
+                        <option key={mood.name} value={mood.name}>
+                          {mood.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {draftFilters.date === "custom" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">
+                        From
+                      </span>
+                      <input
+                        type="date"
+                        value={draftFilters.from}
+                        onChange={(event) =>
+                          setDraftFilters((current) => ({
+                            ...current,
+                            from: event.target.value,
+                          }))
+                        }
+                        className={`${inputClasses()} mt-2`}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">
+                        To
+                      </span>
+                      <input
+                        type="date"
+                        value={draftFilters.to}
+                        onChange={(event) =>
+                          setDraftFilters((current) => ({
+                            ...current,
+                            to: event.target.value,
+                          }))
+                        }
+                        className={`${inputClasses()} mt-2`}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Tags
+                  </span>
+                  <div className="mt-2 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+                    {availableTags.length > 0 ? (
+                      availableTags.map((tag) => {
+                        const isSelected = draftFilters.tags.includes(tag);
+
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() =>
+                              setDraftFilters((current) => ({
+                                ...current,
+                                tags: isSelected
+                                  ? current.tags.filter(
+                                      (currentTag) => currentTag !== tag,
+                                    )
+                                  : [...current.tags, tag],
+                              }))
+                            }
+                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition duration-300 hover:-translate-y-0.5 ${
+                              isSelected
+                                ? "border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <span className="text-sm text-slate-500">
+                        No saved tags yet.
+                      </span>
+                    )}
+                  </div>
+                </label>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Album
+                    </span>
+                    <select
+                      value={draftFilters.albumId}
+                      onChange={(event) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          albumId: event.target.value,
+                        }))
+                      }
+                      className={`${inputClasses()} mt-2`}
+                    >
+                      <option value="">Any album</option>
+                      {albums.map((album) => (
+                        <option key={album.id} value={album.id}>
+                          {album.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Media Type
+                    </span>
+                    <select
+                      value={draftFilters.mediaType}
+                      onChange={(event) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          mediaType: event.target.value,
+                        }))
+                      }
+                      className={`${inputClasses()} mt-2`}
+                    >
+                      <option value="ALL">All</option>
+                      <option value="IMAGE">Images</option>
+                      <option value="VIDEO">Videos</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-700">
+                        Favorites Only
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draftFilters.favorite}
+                      onChange={(event) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          favorite: event.target.checked,
+                        }))
+                      }
+                      className="h-5 w-5 accent-emerald-600"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Sort
+                    </span>
+                    <select
+                      value={draftFilters.sort}
+                      onChange={(event) =>
+                        setDraftFilters((current) => ({
+                          ...current,
+                          sort: event.target.value,
+                        }))
+                      }
+                      className={`${inputClasses()} mt-2`}
+                    >
+                      <option value="newest">Newest</option>
+                      <option value="oldest">Oldest</option>
+                      <option value="updated">Recently Updated</option>
+                      <option value="memoryDate">Memory Date</option>
+                      <option value="titleAsc">Title A-Z</option>
+                      <option value="titleDesc">Title Z-A</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 p-5 sm:flex-row sm:justify-end sm:p-6">
+                <button
+                  type="button"
+                  onClick={() => setDraftFilters(DEFAULT_FILTERS)}
+                  className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5"
+                >
+                  Reset Filters
+                </button>
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <NewMemoryModal
         isOpen={isModalOpen || Boolean(memoryToEdit)}
