@@ -1,5 +1,6 @@
 import { motion, type Variants } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import FeedbackDialog, { type FeedbackState } from "../components/FeedbackDialog";
 import {
   useAppearance,
@@ -10,10 +11,12 @@ import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 import {
   changePassword,
   changeUsername,
+  clearAuthSession,
   getStoredAuthToken,
   requestChangeEmail,
   saveAuthUser,
 } from "../services/auth";
+import { deleteAccount, exportAccountData } from "../services/account";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   getNotificationPreferences,
@@ -22,8 +25,8 @@ import {
   type NotificationPreferences,
   updateNotificationPreferences,
 } from "../services/notificationPreferences";
-
-type ToggleKey = "twoFactor";
+import { getStorageSummary, type StorageSummary } from "../services/storage";
+import { formatBytes } from "../utils/formatBytes";
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -51,18 +54,6 @@ const staggerContainer: Variants = {
     },
   },
 };
-
-const storageItems = [
-  { label: "Photos", value: "3.2 GB", width: "w-[48%]" },
-  { label: "Videos", value: "2.1 GB", width: "w-[32%]" },
-  { label: "Stories", value: "680 MB", width: "w-[12%]" },
-  { label: "Archived", value: "420 MB", width: "w-[8%]" },
-];
-
-const sessions = [
-  { device: "Windows laptop", location: "Manila, PH", active: "Active now" },
-  { device: "Mobile browser", location: "Quezon City, PH", active: "2 days ago" },
-];
 
 const themeOptions: Array<{ label: string; value: ThemePreference }> = [
   { label: "Light", value: "light" },
@@ -173,6 +164,7 @@ function SectionTitle({
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { user: authUser, setUser } = useAuth();
   const {
     themePreference,
@@ -208,9 +200,51 @@ export default function SettingsPage() {
   const [pendingNotificationFields, setPendingNotificationFields] = useState<
     Set<NotificationPreferenceKey>
   >(() => new Set());
-  const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
-    twoFactor: false,
+  const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(
+    null,
+  );
+  const [storageLoading, setStorageLoading] = useState(true);
+  const [storageError, setStorageError] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] =
+    useState(false);
+  const [deleteAccountForm, setDeleteAccountForm] = useState({
+    currentPassword: "",
+    confirmationPhrase: "",
   });
+  const [deleteAccountError, setDeleteAccountError] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const deleteAccountDialogRef = useRef<HTMLDivElement>(null);
+
+  const loadStorageSummary = useCallback(async () => {
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      setStorageError("Please sign in again to load storage usage.");
+      setStorageLoading(false);
+      return;
+    }
+
+    setStorageLoading(true);
+    setStorageError("");
+
+    try {
+      setStorageSummary(await getStorageSummary(token));
+    } catch (error) {
+      setStorageSummary(null);
+      setStorageError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load storage usage.",
+      );
+    } finally {
+      setStorageLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStorageSummary();
+  }, [loadStorageSummary]);
 
   useEffect(() => {
     const token = getStoredAuthToken();
@@ -258,13 +292,6 @@ export default function SettingsPage() {
       });
     }
   }, [privacyPreferencesLoadError]);
-
-  const toggleSetting = (key: ToggleKey) => {
-    setToggles((current) => ({
-      ...current,
-      [key]: !current[key],
-    }));
-  };
 
   const togglePrivacyPreference = async (
     field: "confirmBeforeDelete" | "allowAiSearch",
@@ -502,6 +529,145 @@ export default function SettingsPage() {
       setIsChangingPassword(false);
     }
   };
+
+  const closeDeleteAccountModal = useCallback(() => {
+    if (isDeletingAccount) {
+      return;
+    }
+
+    setIsDeleteAccountModalOpen(false);
+    setDeleteAccountError("");
+    setDeleteAccountForm({ currentPassword: "", confirmationPhrase: "" });
+  }, [isDeletingAccount]);
+
+  useEffect(() => {
+    if (!isDeleteAccountModalOpen) {
+      return;
+    }
+
+    const dialog = deleteAccountDialogRef.current;
+    dialog?.querySelector<HTMLElement>("input")?.focus();
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isDeletingAccount) {
+        closeDeleteAccountModal();
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialog) {
+        return;
+      }
+
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled])',
+        ),
+      );
+
+      if (focusable.length === 0) {
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleDialogKeyDown);
+    return () => window.removeEventListener("keydown", handleDialogKeyDown);
+  }, [closeDeleteAccountModal, isDeleteAccountModalOpen, isDeletingAccount]);
+
+  const handleExportData = async () => {
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      setFeedback({
+        icon: "!",
+        title: "Session expired",
+        message: "Please sign in again before exporting your data.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const { blob, filename } = await exportAccountData(token);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+
+      setFeedback({
+        icon: "✓",
+        title: "Export ready",
+        message: "Your portable I-Nelory data has been downloaded.",
+        type: "success",
+      });
+    } catch (error) {
+      setFeedback({
+        icon: "!",
+        title: "Could not export your data",
+        message:
+          error instanceof Error ? error.message : "Please try again shortly.",
+        type: "error",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      setDeleteAccountError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setDeleteAccountError("");
+
+    try {
+      await deleteAccount(token, {
+        currentPassword: deleteAccountForm.currentPassword,
+        confirmationPhrase: deleteAccountForm.confirmationPhrase.trim(),
+      });
+      clearAuthSession();
+      setUser(null);
+      window.dispatchEvent(new Event("i-nelory.auth.cleared"));
+      setIsDeleteAccountModalOpen(false);
+      setDeleteAccountForm({ currentPassword: "", confirmationPhrase: "" });
+      navigate("/", { replace: true });
+    } catch (error) {
+      setDeleteAccountError(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete your account. Please try again.",
+      );
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
+  const canDeleteAccount =
+    deleteAccountForm.currentPassword.trim().length > 0 &&
+    deleteAccountForm.confirmationPhrase.trim() === "DELETE MY ACCOUNT" &&
+    !isDeletingAccount;
 
   return (
     <motion.div
@@ -841,70 +1007,6 @@ export default function SettingsPage() {
           </div>
         </motion.section>
 
-        {/* Security */}
-        <motion.section
-          variants={fadeUp}
-          whileHover={{ y: -4 }}
-          transition={{ duration: 0.3 }}
-          className={cardClasses()}
-        >
-          <SectionTitle
-            icon="◇"
-            title="Security"
-            subtitle="Review sign-in safety and active sessions."
-          />
-
-          <div className="mt-6 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25"
-              >
-                Change Password
-              </button>
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5"
-              >
-                Logout All Devices
-              </button>
-            </div>
-
-            <SettingRow
-              title="Two-factor authentication"
-              description="Add an extra step when signing in."
-              checked={toggles.twoFactor}
-              onToggle={() => toggleSetting("twoFactor")}
-            />
-
-            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
-              <p className="text-sm font-semibold text-slate-950">
-                Active sessions
-              </p>
-              <div className="mt-3 space-y-3">
-                {sessions.map((session) => (
-                  <div
-                    key={session.device}
-                    className="flex items-center justify-between gap-4 rounded-2xl bg-white p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-950">
-                        {session.device}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {session.location}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      {session.active}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.section>
-
         {/* Storage */}
         <motion.section
           variants={fadeUp}
@@ -919,45 +1021,152 @@ export default function SettingsPage() {
           />
 
           <div className="mt-6">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-3xl font-semibold tracking-tight text-slate-950">
-                  6.4 GB
+            {storageLoading ? (
+              <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-6 text-center">
+                <p className="text-sm font-medium text-slate-500">
+                  Loading storage usage...
                 </p>
-                <p className="mt-1 text-sm text-slate-500">of 15 GB used</p>
               </div>
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md hover:shadow-slate-950/5"
-              >
-                Manage Storage
-              </button>
-            </div>
-
-            <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full w-[43%] rounded-full bg-emerald-500" />
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {storageItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4"
+            ) : storageError ? (
+              <div className="rounded-[1.25rem] border border-red-100 bg-red-50 p-5 text-center">
+                <p className="text-sm font-semibold text-red-600">
+                  Storage usage could not be loaded
+                </p>
+                <p className="mt-2 text-sm text-slate-500">{storageError}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadStorageSummary()}
+                  className="mt-4 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition duration-300 hover:border-emerald-200 hover:text-emerald-700"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-950">
-                      {item.label}
+                  Retry
+                </button>
+              </div>
+            ) : storageSummary ? (
+              <>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-3xl font-semibold tracking-tight text-slate-950">
+                      {formatBytes(storageSummary.usedBytes)} used
                     </p>
-                    <p className="text-sm text-slate-500">{item.value}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      of {formatBytes(storageSummary.limitBytes)}
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-emerald-700">
+                      {formatBytes(storageSummary.remainingBytes)} remaining
+                    </p>
                   </div>
-                  <div className="mt-3 h-2 rounded-full bg-white">
-                    <div
-                      className={`${item.width} h-2 rounded-full bg-emerald-400`}
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate("/dashboard/memories?manageStorage=1")
+                    }
+                    className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md hover:shadow-slate-950/5"
+                  >
+                    Manage Storage
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-500 ${
+                      storageSummary.usagePercentage >= 90
+                        ? "bg-red-500"
+                        : storageSummary.usagePercentage >= 80
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                    }`}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, storageSummary.usagePercentage))}%`,
+                    }}
+                  />
+                </div>
+
+                {storageSummary.usagePercentage >= 80 ? (
+                  <div
+                    className={`mt-4 rounded-2xl border p-4 ${
+                      storageSummary.usagePercentage >= 90
+                        ? "border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
+                        : "border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/30"
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-semibold ${
+                        storageSummary.usagePercentage >= 90
+                          ? "text-red-700"
+                          : "text-amber-700 dark:text-amber-300"
+                      }`}
+                    >
+                      {storageSummary.usagePercentage >= 100
+                        ? "Storage full"
+                        : storageSummary.usagePercentage >= 90
+                          ? "Storage is almost full"
+                          : "Storage is running low"}
+                    </p>
+                    <p className="mt-1 text-sm leading-5 text-slate-600">
+                      {storageSummary.usagePercentage >= 100
+                        ? "New uploads are blocked until memory media is permanently deleted."
+                        : "Review large memory files to keep enough room for new uploads."}
+                    </p>
+                  </div>
+                ) : null}
+
+                {storageSummary.hasUnknownUsage ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-950/30">
+                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                      Storage metadata synchronization required
+                    </p>
+                    <p className="mt-1 text-sm leading-5 text-slate-600">
+                      {storageSummary.unknownMediaCount} legacy media file
+                      {storageSummary.unknownMediaCount === 1 ? " has" : "s have"} an unknown size. New memory uploads remain blocked until the one-time backfill is run.
+                    </p>
+                  </div>
+                ) : null}
+
+                {storageSummary.totalMemories === 0 ? (
+                  <div className="mt-5 rounded-[1.25rem] border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center">
+                    <p className="text-sm font-semibold text-slate-950">
+                      No memories are using storage yet.
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Your photos and videos will appear here after you add them.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    {[
+                      {
+                        label: "Total Memories",
+                        value: `${storageSummary.totalMemories} memories`,
+                      },
+                      {
+                        label: "Photos",
+                        value: `${storageSummary.imageCount} files • ${formatBytes(storageSummary.imageBytes)}`,
+                      },
+                      {
+                        label: "Videos",
+                        value: `${storageSummary.videoCount} files • ${formatBytes(storageSummary.videoBytes)}`,
+                      },
+                      {
+                        label: "Archived",
+                        value: `${storageSummary.archivedCount} memories • ${formatBytes(storageSummary.archivedBytes)} included in total`,
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4"
+                      >
+                        <p className="text-sm font-semibold text-slate-950">
+                          {item.label}
+                        </p>
+                        <p className="mt-2 text-sm leading-5 text-slate-500">
+                          {item.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
         </motion.section>
       </motion.div>
@@ -1218,8 +1427,8 @@ export default function SettingsPage() {
                 Danger Zone
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                Export your data whenever you need it. Account deletion is a
-                serious action and will require confirmation later.
+                Export a portable copy of your data, or permanently delete your
+                account and every memory associated with it.
               </p>
             </div>
           </div>
@@ -1227,12 +1436,18 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
-              className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5"
+              onClick={() => void handleExportData()}
+              disabled={isExporting}
+              className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-950/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Export Data
+              {isExporting ? "Preparing export..." : "Export Data"}
             </button>
             <button
               type="button"
+              onClick={() => {
+                setDeleteAccountError("");
+                setIsDeleteAccountModalOpen(true);
+              }}
               className="rounded-full bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/25"
             >
               Delete Account
@@ -1240,6 +1455,150 @@ export default function SettingsPage() {
           </div>
         </div>
       </motion.section>
+
+      {isDeleteAccountModalOpen ? (
+        <div
+          className="fixed inset-0 z-90 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDeleteAccountModal();
+            }
+          }}
+        >
+          <div
+            ref={deleteAccountDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            aria-describedby="delete-account-description"
+            className="max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-4xl border border-red-100 bg-white p-6 shadow-2xl shadow-slate-950/25 sm:p-8"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-red-600">
+                  Permanent action
+                </p>
+                <h2
+                  id="delete-account-title"
+                  className="mt-2 text-2xl font-semibold tracking-tight text-slate-950"
+                >
+                  Delete your account?
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteAccountModal}
+                disabled={isDeletingAccount}
+                aria-label="Close account deletion dialog"
+                className="rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              id="delete-account-description"
+              className="mt-5 rounded-3xl border border-red-100 bg-red-50/70 p-5 text-sm leading-6 text-slate-700 dark:bg-red-950/30"
+            >
+              <p className="font-semibold text-red-700">
+                This cannot be undone. It permanently deletes:
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>your account</li>
+                <li>all memories and albums</li>
+                <li>all uploaded images and videos</li>
+                <li>notifications and preferences</li>
+              </ul>
+            </div>
+
+            <form className="mt-6 space-y-5" onSubmit={handleDeleteAccount}>
+              <div>
+                <label
+                  className="text-sm font-semibold text-slate-950"
+                  htmlFor="delete-account-password"
+                >
+                  Current password
+                </label>
+                <input
+                  id="delete-account-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={deleteAccountForm.currentPassword}
+                  onChange={(event) =>
+                    setDeleteAccountForm((current) => ({
+                      ...current,
+                      currentPassword: event.target.value,
+                    }))
+                  }
+                  disabled={isDeletingAccount}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder="Enter your current password"
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  className="text-sm font-semibold text-slate-950"
+                  htmlFor="delete-account-phrase"
+                >
+                  Type DELETE MY ACCOUNT to confirm
+                </label>
+                <input
+                  id="delete-account-phrase"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={deleteAccountForm.confirmationPhrase}
+                  onChange={(event) =>
+                    setDeleteAccountForm((current) => ({
+                      ...current,
+                      confirmationPhrase: event.target.value,
+                    }))
+                  }
+                  disabled={isDeletingAccount}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder="DELETE MY ACCOUNT"
+                  required
+                />
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  The phrase is case-sensitive. Spaces before or after it are
+                  ignored.
+                </p>
+              </div>
+
+              {deleteAccountError ? (
+                <p
+                  role="alert"
+                  className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                >
+                  {deleteAccountError}
+                </p>
+              ) : null}
+
+              <div className="flex flex-col-reverse gap-3 pt-1 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeleteAccountModal}
+                  disabled={isDeletingAccount}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!canDeleteAccount}
+                  className="rounded-full bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300 disabled:shadow-none"
+                >
+                  {isDeletingAccount
+                    ? "Deleting account..."
+                    : "Delete my account permanently"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </motion.div>
   );
 }

@@ -23,6 +23,7 @@ export type ApiMemory = {
   description?: string | null;
   mediaUrl?: string | null;
   mediaPublicId?: string | null;
+  mediaSizeBytes?: number | null;
   mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
   memoryDate?: string | null;
   mood?: string | null;
@@ -383,6 +384,7 @@ export default function NewMemoryModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorTitle, setErrorTitle] = useState("Memory not saved");
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -554,6 +556,7 @@ export default function NewMemoryModal({
     setSelectedMedia(file);
     setMediaPreviewUrl(previewUrl);
     setErrorMessage("");
+    setErrorTitle("Memory not saved");
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -569,6 +572,7 @@ export default function NewMemoryModal({
     const tagsToSave = selectedTags;
 
     setErrorMessage("");
+    setErrorTitle("Memory not saved");
 
     if (!title) {
       setErrorMessage("Please add a memory title before saving.");
@@ -653,10 +657,25 @@ export default function NewMemoryModal({
 
       const data = (await response.json().catch(() => null)) as
         | SaveMemoryResponse
-        | { message?: string }
+        | { message?: string; code?: string }
         | null;
 
       if (!response.ok) {
+        if (response.status === 413) {
+          const errorCode = data && "code" in data ? data.code : undefined;
+          const metadataRequired = errorCode === "STORAGE_METADATA_REQUIRED";
+          setErrorTitle(
+            metadataRequired
+              ? "Storage metadata required"
+              : "Storage limit reached",
+          );
+          throw new Error(
+            metadataRequired
+              ? "Storage usage must be synchronized before uploading more media. Ask the administrator to run the storage backfill and try again."
+              : "You do not have enough remaining storage for this file. Permanently delete some memories and try again.",
+          );
+        }
+
         throw new Error(
           data?.message ||
             (memory ? "Failed to update memory." : "Failed to save memory."),
@@ -1026,10 +1045,13 @@ export default function NewMemoryModal({
       <FeedbackDialog
         isOpen={Boolean(errorMessage)}
         icon="!"
-        title="Memory not saved"
+        title={errorTitle}
         message={errorMessage}
         type="error"
-        onDismiss={() => setErrorMessage("")}
+        onDismiss={() => {
+          setErrorMessage("");
+          setErrorTitle("Memory not saved");
+        }}
       />
     </>
   );

@@ -34,6 +34,22 @@ const memoryTagsInclude = {
   },
 };
 
+function serializeMemorySize<T extends { mediaSizeBytes?: bigint | null }>(
+  memory: T | null,
+) {
+  if (!memory) {
+    return null;
+  }
+
+  return {
+    ...memory,
+    mediaSizeBytes:
+      memory.mediaSizeBytes === null || memory.mediaSizeBytes === undefined
+        ? null
+        : Number(memory.mediaSizeBytes),
+  };
+}
+
 export async function getDashboardSummary(userId: string) {
   const today = new Date();
 
@@ -145,12 +161,12 @@ export async function getDashboardSummary(userId: string) {
       favorites,
       archived,
     },
-    memoryOfTheDay,
-    recentMemories,
+    memoryOfTheDay: serializeMemorySize(memoryOfTheDay),
+    recentMemories: recentMemories.map((memory) => serializeMemorySize(memory)),
     recentAlbums: recentAlbums.map((album) => ({
       ...album,
       memoryCount: album._count.memories,
     })),
-    onThisDay,
+    onThisDay: onThisDay.map((memory) => serializeMemorySize(memory)),
   };
 }

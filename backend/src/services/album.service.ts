@@ -158,7 +158,16 @@ export const getUserAlbumById = async (userId: string, albumId: string) => {
     throw new Error("Album not found");
   }
 
-  return album;
+  return {
+    ...album,
+    memories: album.memories.map((memory) => ({
+      ...memory,
+      mediaSizeBytes:
+        memory.mediaSizeBytes === null
+          ? null
+          : Number(memory.mediaSizeBytes),
+    })),
+  };
 };
 
 export const updateUserAlbumCover = async (

@@ -655,7 +655,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/70 p-5 lg:w-56">
+          {/*<div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/70 p-5 lg:w-56">
             <p className="text-sm font-semibold text-emerald-800">
               Profile customization
             </p>
@@ -668,7 +668,7 @@ export default function ProfilePage() {
                 identity.
               </p>
             </div>
-          </div>
+          </div> */}
         </div>
       </motion.section>
 

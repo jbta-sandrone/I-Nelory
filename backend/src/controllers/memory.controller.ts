@@ -17,6 +17,24 @@ import {
 } from "../types/memory.types.js";
 import { notifyUser } from "../services/notification.service.js";
 import { getPrivacyPreferences } from "../services/privacy-preference.service.js";
+import { StorageQuotaError } from "../services/storage.service.js";
+
+function sendMemoryMutationError(
+  res: Response,
+  error: unknown,
+  fallbackMessage: string,
+) {
+  if (error instanceof StorageQuotaError) {
+    return res.status(error.statusCode).json({
+      message: error.message,
+      code: error.code,
+      ...error.details,
+    });
+  }
+
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  return res.status(message === "Memory not found" ? 404 : 400).json({ message });
+}
 
 function parseRequestTags(value: unknown): string[] | undefined {
   if (value === undefined) {
@@ -87,9 +105,7 @@ export const createMemory = async (
             memory,
         });
     } catch (error) {
-        return res.status(400).json({
-            message: error instanceof Error ? error.message : "Failed to create memory",
-        });
+        return sendMemoryMutationError(res, error, "Failed to create memory");
     }
 };
 
@@ -132,12 +148,7 @@ export const updateMemory = async (req: AuthRequest, res: Response) => {
       memory,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to update memory";
-
-    return res.status(message === "Memory not found" ? 404 : 400).json({
-      message,
-    });
+    return sendMemoryMutationError(res, error, "Failed to update memory");
   }
 };
 

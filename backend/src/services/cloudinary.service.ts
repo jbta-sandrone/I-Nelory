@@ -114,6 +114,17 @@ export const deleteMemoryImage = async (
   return deleteMedia(publicId, resourceType);
 };
 
+export const getMemoryMediaResource = async (
+  publicId: string,
+  resourceType: "image" | "video" = "image",
+) => {
+  configureCloudinary();
+
+  return cloudinary.api.resource(publicId, {
+    resource_type: resourceType,
+  }) as Promise<{ bytes?: number }>;
+};
+
 export const uploadAlbumCover = async (file: Express.Multer.File) => {
   return uploadImage(file, "i-nelory/albums");
 };
@@ -128,4 +139,21 @@ export const uploadAvatar = async (file: Express.Multer.File) => {
 
 export const deleteAvatar = async (publicId: string) => {
   return deleteImage(publicId);
+};
+
+export const deleteAccountCloudinaryResource = async (
+  publicId: string,
+  resourceType: "image" | "video",
+) => {
+  configureCloudinary();
+
+  const result = (await cloudinary.uploader.destroy(publicId, {
+    resource_type: resourceType,
+  })) as { result?: string };
+
+  if (result.result === "ok" || result.result === "not found") {
+    return;
+  }
+
+  throw new Error("Cloudinary resource cleanup failed");
 };

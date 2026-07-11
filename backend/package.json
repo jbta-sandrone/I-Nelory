@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "tsc",
+    "storage:backfill": "tsx src/scripts/backfill-memory-media-sizes.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "archiver": "^8.0.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.6",
@@ -19,12 +21,13 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
+    "nodemailer": "^7.0.13",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
-    "nodemailer": "^7.0.13",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",

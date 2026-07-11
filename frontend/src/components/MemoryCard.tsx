@@ -16,6 +16,7 @@ export type MemoryCardMemory = {
   mediaUrl?: string | null;
   mediaType?: string | null;
   favorite: boolean;
+  albumId?: string | null;
 };
 
 type MemoryCardProps<TMemory extends MemoryCardMemory> = {
@@ -26,6 +27,7 @@ type MemoryCardProps<TMemory extends MemoryCardMemory> = {
   onEdit: (memory: TMemory) => void;
   onArchive: (memory: TMemory) => void;
   onDelete: (memory: TMemory) => void;
+  onAlbumAction?: (memory: TMemory) => void;
   onOpen?: (memory: TMemory) => void;
 };
 
@@ -60,6 +62,7 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
   onEdit,
   onArchive,
   onDelete,
+  onAlbumAction,
   onOpen,
 }: MemoryCardProps<TMemory>) {
   const mediaUrl = memory.mediaUrl ?? memory.image;
@@ -72,7 +75,7 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
       variants={fadeUp}
       whileHover={{ y: -6, scale: 1.01 }}
       transition={{ duration: 0.35 }}
-      className="group relative min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+      className="group relative min-w-0 overflow-visible rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
     >
       <div className="relative h-52 overflow-hidden">
         {onOpen ? (
@@ -150,9 +153,16 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.96 }}
                   transition={{ duration: 0.18 }}
-                  className="absolute right-0 top-11 z-20 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
+                  className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl shadow-slate-950/10"
                 >
-                  {["Edit", "Archive", "Delete"].map((action) => (
+                  {[
+                    "Edit",
+                    ...(onAlbumAction
+                      ? [memory.albumId ? "Remove from album" : "Add to album"]
+                      : []),
+                    "Archive",
+                    "Delete",
+                  ].map((action) => (
                     <button
                       key={action}
                       type="button"
@@ -164,6 +174,13 @@ export default function MemoryCard<TMemory extends MemoryCardMemory>({
 
                         if (action === "Archive") {
                           onArchive(memory);
+                        }
+
+                        if (
+                          action === "Add to album" ||
+                          action === "Remove from album"
+                        ) {
+                          onAlbumAction?.(memory);
                         }
 
                         if (action === "Delete") {

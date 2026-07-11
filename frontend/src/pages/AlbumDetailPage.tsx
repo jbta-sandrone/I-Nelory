@@ -18,6 +18,7 @@ import {
 } from "../utils/actionTransition";
 import { formatMoodLabel, getMemoryTagNames } from "../utils/memoryMetadata";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
+import { setMemoryAlbum } from "../services/memoryAlbums";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -658,6 +659,55 @@ export default function AlbumDetailPage() {
     setMemoryToView(null);
   };
 
+  const removeMemoryFromAlbum = async (memory: Memory) => {
+    setOpenMemoryMenuId(null);
+    const token = getStoredToken();
+
+    if (!token) {
+      showFeedback({
+        icon: "!",
+        title: "Could not remove from album",
+        message: "Missing authentication token. Please log in again.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      await setMemoryAlbum<ApiMemory>(token, memory.id, null);
+      setMemories((currentMemories) =>
+        currentMemories.filter(
+          (currentMemory) => currentMemory.id !== memory.id,
+        ),
+      );
+      setAlbum((currentAlbum) =>
+        currentAlbum
+          ? {
+              ...currentAlbum,
+              memories: currentAlbum.memories.filter(
+                (currentMemory) => currentMemory.id !== memory.id,
+              ),
+            }
+          : currentAlbum,
+      );
+      showFeedback({
+        icon: "A",
+        title: "Removed from album",
+        message: "The memory remains available in Memories.",
+      });
+    } catch (error) {
+      showFeedback({
+        icon: "!",
+        title: "Could not remove from album",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to remove this memory from its album.",
+        type: "error",
+      });
+    }
+  };
+
   const openDeleteConfirmation = (memory: Memory) => {
     setOpenMemoryMenuId(null);
     setDeleteMemoryErrorMessage("");
@@ -972,6 +1022,7 @@ export default function AlbumDetailPage() {
               onEdit={openEditModalForMemory}
               onArchive={archiveMemory}
               onDelete={openDeleteConfirmation}
+              onAlbumAction={removeMemoryFromAlbum}
               onOpen={openMemoryViewer}
             />
           ))}

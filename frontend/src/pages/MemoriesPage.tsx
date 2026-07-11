@@ -11,6 +11,7 @@ import FeedbackDialog, {
 } from "../components/FeedbackDialog";
 import MemoryMedia from "../components/MemoryMedia";
 import MemoryCard from "../components/MemoryCard";
+import AlbumSelectionModal from "../components/AlbumSelectionModal";
 import NewMemoryModal, {
   type ApiMemory,
   type EditableMemory,
@@ -21,6 +22,10 @@ import {
   getMemoryTagNames,
 } from "../utils/memoryMetadata";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
+import {
+  setMemoryAlbum,
+  type AlbumOption,
+} from "../services/memoryAlbums";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -36,6 +41,7 @@ type Memory = {
   type: MemoryType;
   mediaType: string | null;
   mediaUrl: string | null;
+  mediaSizeBytes: number | null;
   tags: string[];
   image: string | null;
   favorite: boolean;
@@ -143,6 +149,7 @@ const sortLabels: Record<string, string> = {
   memoryDate: "Memory Date",
   titleAsc: "Title A-Z",
   titleDesc: "Title Z-A",
+  sizeDesc: "Largest Media",
 };
 
 function inputClasses() {
@@ -207,6 +214,7 @@ function mapApiMemory(memory: ApiMemory): Memory {
     type,
     mediaType: memory.mediaType ?? null,
     mediaUrl: memory.mediaUrl?.trim() || null,
+    mediaSizeBytes: memory.mediaSizeBytes ?? null,
     tags,
     image: memory.mediaUrl?.trim() || null,
     favorite: memory.isFavorite,
@@ -392,6 +400,7 @@ export default function MemoriesPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState("");
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [memoryForAlbum, setMemoryForAlbum] = useState<Memory | null>(null);
   const [draftFilters, setDraftFilters] =
     useState<MemoryFilters>(DEFAULT_FILTERS);
 
@@ -586,6 +595,11 @@ export default function MemoriesPage() {
             return firstMemory.title.localeCompare(secondMemory.title);
           case "titleDesc":
             return secondMemory.title.localeCompare(firstMemory.title);
+          case "sizeDesc":
+            return (
+              (secondMemory.mediaSizeBytes ?? -1) -
+              (firstMemory.mediaSizeBytes ?? -1)
+            );
           case "newest":
           default:
             return compareDates(firstMemory.createdAt, secondMemory.createdAt);
@@ -602,6 +616,7 @@ export default function MemoriesPage() {
     filters.mediaType !== "ALL" ||
     filters.favorite ||
     filters.sort !== "newest";
+  const isManagingStorage = searchParams.get("manageStorage") === "1";
   const activeFilterChips: ActiveFilterChip[] = [
     ...(searchQuery
       ? [{ key: "q", label: `Search: ${searchQuery}` }]
@@ -970,6 +985,115 @@ export default function MemoriesPage() {
     setMemoryToDelete(memory);
   };
 
+  const assignMemoryToAlbum = async (album: AlbumOption) => {
+    if (!memoryForAlbum) {
+      return;
+    }
+
+    const token = getStoredToken();
+
+    if (!token) {
+      const error = new Error(
+        "Missing authentication token. Please log in again.",
+      );
+      showFeedback({
+        icon: "!",
+        title: "Could not add to album",
+        message: error.message,
+        type: "error",
+      });
+      throw error;
+    }
+
+    try {
+      const { memory: updatedMemory } = await setMemoryAlbum<ApiMemory>(
+        token,
+        memoryForAlbum.id,
+        album.id,
+      );
+
+      setMemories((currentMemories) =>
+        currentMemories.map((memory) =>
+          memory.id === memoryForAlbum.id
+            ? mapApiMemory(updatedMemory)
+            : memory,
+        ),
+      );
+      showFeedback({
+        icon: "A",
+        title: "Added to album",
+        message: `This memory is now in "${album.name}".`,
+      });
+    } catch (error) {
+      showFeedback({
+        icon: "!",
+        title: "Could not add to album",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to add this memory to the album.",
+        type: "error",
+      });
+      throw error;
+    }
+  };
+
+  const removeMemoryFromAlbum = async (memory: Memory) => {
+    setOpenMenuId(null);
+    const token = getStoredToken();
+
+    if (!token) {
+      showFeedback({
+        icon: "!",
+        title: "Could not remove from album",
+        message: "Missing authentication token. Please log in again.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const { memory: updatedMemory } = await setMemoryAlbum<ApiMemory>(
+        token,
+        memory.id,
+        null,
+      );
+      setMemories((currentMemories) =>
+        currentMemories.map((currentMemory) =>
+          currentMemory.id === memory.id
+            ? mapApiMemory(updatedMemory)
+            : currentMemory,
+        ),
+      );
+      showFeedback({
+        icon: "A",
+        title: "Removed from album",
+        message: "The memory remains available in Memories.",
+      });
+    } catch (error) {
+      showFeedback({
+        icon: "!",
+        title: "Could not remove from album",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to remove this memory from its album.",
+        type: "error",
+      });
+    }
+  };
+
+  const handleMemoryAlbumAction = (memory: Memory) => {
+    setOpenMenuId(null);
+
+    if (memory.albumId) {
+      void removeMemoryFromAlbum(memory);
+      return;
+    }
+
+    setMemoryForAlbum(memory);
+  };
+
   const closeDeleteConfirmation = () => {
     if (!isDeleting) {
       setDeleteErrorMessage("");
@@ -1095,6 +1219,49 @@ export default function MemoriesPage() {
           + New Memory
         </button>
       </motion.section>
+
+      {isManagingStorage ? (
+        <motion.section
+          variants={fadeUp}
+          className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm shadow-emerald-950/5 sm:p-5"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">
+                Storage management
+              </p>
+              <p className="mt-1 text-sm leading-5 text-slate-600">
+                Permanently deleting media releases storage. Archiving does not. Sort by size or focus on videos to find larger files.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set("sort", "sizeDesc");
+                  setSearchParams(next);
+                }}
+                className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                Largest first
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set("mediaType", "VIDEO");
+                  next.set("sort", "sizeDesc");
+                  setSearchParams(next);
+                }}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Show videos
+              </button>
+            </div>
+          </div>
+        </motion.section>
+      ) : null}
 
       {/* Active Filters */}
       <motion.section
@@ -1251,6 +1418,7 @@ export default function MemoriesPage() {
               onEdit={openEditModal}
               onArchive={archiveMemory}
               onDelete={openDeleteConfirmation}
+              onAlbumAction={handleMemoryAlbumAction}
               onOpen={openMemoryViewer}
             />
           ))}
@@ -1528,6 +1696,7 @@ export default function MemoriesPage() {
                       <option value="memoryDate">Memory Date</option>
                       <option value="titleAsc">Title A-Z</option>
                       <option value="titleDesc">Title Z-A</option>
+                      <option value="sizeDesc">Largest Media</option>
                     </select>
                   </label>
                 </div>
@@ -1558,6 +1727,13 @@ export default function MemoriesPage() {
         isOpen={isModalOpen || Boolean(memoryToEdit)}
         onClose={closeMemoryModal}
         memory={memoryToEdit}
+      />
+
+      <AlbumSelectionModal
+        isOpen={Boolean(memoryForAlbum)}
+        memoryTitle={memoryForAlbum?.title ?? "Memory"}
+        onClose={() => setMemoryForAlbum(null)}
+        onSelect={assignMemoryToAlbum}
       />
 
       <FeedbackDialog

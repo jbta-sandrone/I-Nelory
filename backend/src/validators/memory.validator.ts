@@ -26,5 +26,8 @@ export const updateMemorySchema = z.object({
 });
 
 export const assignMemoryAlbumSchema = z.object({
-  albumId: z.string().nullable(),
+  albumId: z.union([
+    z.string().trim().min(1, "Album id cannot be empty"),
+    z.null(),
+  ]),
 });

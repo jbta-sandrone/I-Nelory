@@ -10,6 +10,11 @@ import {
 } from "../types/memory.types.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { notifyUser } from "./notification.service.js";
+import {
+  assertUploadFitsQuota,
+  notifyStorageThresholdCrossing,
+  withUserStorageLock,
+} from "./storage.service.js";
 
 type CloudinaryMemoryResourceType = "image" | "video";
 const MAX_MEMORY_TAGS = 20;
@@ -46,6 +51,35 @@ function getCloudinaryResourceType(
   value?: string | null,
 ): CloudinaryMemoryResourceType {
   return normalizeMediaType(value) === MediaType.VIDEO ? "video" : "image";
+}
+
+function serializeMemorySize<T extends { mediaSizeBytes?: bigint | null }>(
+  memory: T,
+) {
+  return {
+    ...memory,
+    mediaSizeBytes:
+      memory.mediaSizeBytes === null || memory.mediaSizeBytes === undefined
+        ? null
+        : Number(memory.mediaSizeBytes),
+  };
+}
+
+async function cleanupUploadedMemory(
+  uploadedMedia: { public_id: string; resource_type?: string } | null,
+) {
+  if (!uploadedMedia) {
+    return;
+  }
+
+  try {
+    await deleteMemoryImage(
+      uploadedMedia.public_id,
+      uploadedMedia.resource_type === "video" ? "video" : "image",
+    );
+  } catch (cleanupError) {
+    console.warn("Failed to clean up newly uploaded memory media", cleanupError);
+  }
 }
 
 function parseTagNames(value?: string[] | string | null) {
@@ -187,7 +221,7 @@ export const getUserMemories = async (userId: string) => {
     },
   });
 
-  return memories;
+  return memories.map(serializeMemorySize);
 };
 
 export const getUserArchivedMemories = async (userId: string) => {
@@ -202,7 +236,7 @@ export const getUserArchivedMemories = async (userId: string) => {
     },
   });
 
-  return memories;
+  return memories.map(serializeMemorySize);
 };
 
 export const createUserMemory = async (
@@ -210,32 +244,62 @@ export const createUserMemory = async (
   data: CreateMemoryRequest,
   mediaFile?: Express.Multer.File,
 ) => {
-  const uploadedMedia = mediaFile ? await uploadMemoryImage(mediaFile) : null;
-
   const mediaType = mediaFile
     ? getMediaTypeFromFile(mediaFile)
     : normalizeMediaType(data.mediaType);
-
   const albumId = await getVerifiedAlbumId(userId, data.albumId);
   const tagConnections = await getUserTagConnections(userId, data.tags);
+  let uploadedMedia: Awaited<ReturnType<typeof uploadMemoryImage>> | null = null;
+  let previousUsedBytes = 0;
+  let nextUsedBytes = 0;
+  let memory: any;
 
-  const memory = await prisma.memory.create({
-    data: {
-      title: data.title,
-      description: data.description,
-      mediaUrl: uploadedMedia?.secure_url ?? data.mediaUrl,
-      mediaPublicId: uploadedMedia?.public_id,
-      mediaType,
-      memoryDate: data.memoryDate ? new Date(data.memoryDate) : undefined,
-      location: data.location,
-      ...(albumId !== undefined ? { albumId } : {}),
-      ...(tagConnections && tagConnections.length > 0
-        ? { tags: { connect: tagConnections } }
-        : {}),
-      userId,
-    },
-    include: memoryWithTagsInclude,
+  const buildCreateData = () => ({
+    title: data.title,
+    description: data.description,
+    mediaUrl: uploadedMedia?.secure_url ?? data.mediaUrl,
+    mediaPublicId: uploadedMedia?.public_id,
+    mediaSizeBytes: uploadedMedia
+      ? BigInt(uploadedMedia.bytes ?? mediaFile?.size ?? 0)
+      : null,
+    mediaType,
+    memoryDate: data.memoryDate ? new Date(data.memoryDate) : undefined,
+    location: data.location,
+    ...(albumId !== undefined ? { albumId } : {}),
+    ...(tagConnections && tagConnections.length > 0
+      ? { tags: { connect: tagConnections } }
+      : {}),
+    userId,
   });
+
+  if (!mediaFile) {
+    memory = await prisma.memory.create({
+      data: buildCreateData(),
+      include: memoryWithTagsInclude,
+    });
+  } else {
+    try {
+      memory = await withUserStorageLock(
+        userId,
+        async (transaction, snapshot) => {
+          assertUploadFitsQuota(snapshot, mediaFile.size);
+          uploadedMedia = await uploadMemoryImage(mediaFile);
+          const finalSizeBytes = uploadedMedia.bytes ?? mediaFile.size;
+          assertUploadFitsQuota(snapshot, finalSizeBytes);
+          previousUsedBytes = snapshot.usedBytes;
+          nextUsedBytes = snapshot.usedBytes + finalSizeBytes;
+
+          return (transaction as any).memory.create({
+            data: buildCreateData(),
+            include: memoryWithTagsInclude,
+          });
+        },
+      );
+    } catch (error) {
+      await cleanupUploadedMemory(uploadedMedia);
+      throw error;
+    }
+  }
 
   try {
     await notifyUser({
@@ -254,33 +318,47 @@ export const createUserMemory = async (
     console.warn("Failed to create memory notification", error);
   }
 
-  return memory;
+  if (mediaFile) {
+    try {
+      await notifyStorageThresholdCrossing(
+        userId,
+        previousUsedBytes,
+        nextUsedBytes,
+      );
+    } catch (error) {
+      console.warn("Failed to create storage threshold notification", error);
+    }
+  }
+
+  return serializeMemorySize(memory);
 };
 
 export const deleteUserMemory = async (userId: string, memoryId: string) => {
-  const memory = await prisma.memory.findFirst({
-    where: {
-      id: memoryId,
-      userId,
+  const memory = await withUserStorageLock(
+    userId,
+    async (transaction) => {
+      const lockedMemory = await (transaction as any).memory.findFirst({
+        where: { id: memoryId, userId },
+      });
+
+      if (!lockedMemory) {
+        throw new Error("Memory not found");
+      }
+
+      if (lockedMemory.mediaPublicId) {
+        await deleteMemoryImage(
+          lockedMemory.mediaPublicId,
+          getCloudinaryResourceType(lockedMemory.mediaType),
+        );
+      }
+
+      await (transaction as any).memory.delete({
+        where: { id: memoryId },
+      });
+
+      return lockedMemory;
     },
-  });
-
-  if (!memory) {
-    throw new Error("Memory not found");
-  }
-
-  if (memory.mediaPublicId) {
-    await deleteMemoryImage(
-      memory.mediaPublicId,
-      getCloudinaryResourceType(memory.mediaType),
-    );
-  }
-
-  await prisma.memory.delete({
-    where: {
-      id: memoryId,
-    },
-  });
+  );
 
   try {
     await notifyUser({
@@ -297,7 +375,7 @@ export const deleteUserMemory = async (userId: string, memoryId: string) => {
     console.warn("Failed to create delete-memory notification", error);
   }
 
-  return memory;
+  return serializeMemorySize(memory);
 };
 
 export const updateUserMemory = async (
@@ -319,37 +397,91 @@ export const updateUserMemory = async (
 
   const albumId = await getVerifiedAlbumId(userId, data.albumId);
   const tagConnections = await getUserTagConnections(userId, data.tags);
-  const uploadedMedia = mediaFile ? await uploadMemoryImage(mediaFile) : null;
   const newMediaType = mediaFile ? getMediaTypeFromFile(mediaFile) : undefined;
+  let uploadedMedia: Awaited<ReturnType<typeof uploadMemoryImage>> | null = null;
+  let previousUsedBytes = 0;
+  let nextUsedBytes = 0;
 
-  if (uploadedMedia && memory.mediaPublicId) {
-    await deleteMemoryImage(
-      memory.mediaPublicId,
-      getCloudinaryResourceType(memory.mediaType),
-    );
-  }
-
-  const updatedMemory = await prisma.memory.update({
-    where: {
-      id: memoryId,
-    },
-    data: {
-      title: data.title,
-      description: data.description ?? null,
-      location: data.location ?? null,
-      memoryDate: data.memoryDate ? new Date(data.memoryDate) : null,
-      ...(albumId !== undefined ? { albumId } : {}),
-      ...(tagConnections !== undefined ? { tags: { set: tagConnections } } : {}),
-      ...(uploadedMedia
-        ? {
-            mediaUrl: uploadedMedia.secure_url,
-            mediaPublicId: uploadedMedia.public_id,
-            mediaType: newMediaType,
-          }
-        : {}),
-    },
-    include: memoryWithTagsInclude,
+  const buildUpdateData = () => ({
+    title: data.title,
+    description: data.description ?? null,
+    location: data.location ?? null,
+    memoryDate: data.memoryDate ? new Date(data.memoryDate) : null,
+    ...(albumId !== undefined ? { albumId } : {}),
+    ...(tagConnections !== undefined ? { tags: { set: tagConnections } } : {}),
+    ...(uploadedMedia
+      ? {
+          mediaUrl: uploadedMedia.secure_url,
+          mediaPublicId: uploadedMedia.public_id,
+          mediaSizeBytes: BigInt(uploadedMedia.bytes ?? mediaFile?.size ?? 0),
+          mediaType: newMediaType,
+        }
+      : {}),
   });
+
+  let updatedMemory: any;
+
+  if (!mediaFile) {
+    updatedMemory = await prisma.memory.update({
+      where: { id: memoryId },
+      data: buildUpdateData(),
+      include: memoryWithTagsInclude,
+    });
+  } else {
+    try {
+      const replacementResult = await withUserStorageLock(
+        userId,
+        async (transaction, snapshot) => {
+          const lockedMemory = await (transaction as any).memory.findFirst({
+            where: { id: memoryId, userId },
+          });
+
+          if (!lockedMemory) {
+            throw new Error("Memory not found");
+          }
+
+          const oldMediaSizeBytes = Number(lockedMemory.mediaSizeBytes ?? 0);
+          assertUploadFitsQuota(snapshot, mediaFile.size, oldMediaSizeBytes);
+          uploadedMedia = await uploadMemoryImage(mediaFile);
+          const finalSizeBytes = uploadedMedia.bytes ?? mediaFile.size;
+          assertUploadFitsQuota(snapshot, finalSizeBytes, oldMediaSizeBytes);
+          previousUsedBytes = snapshot.usedBytes;
+          nextUsedBytes =
+            snapshot.usedBytes - oldMediaSizeBytes + finalSizeBytes;
+
+          const oldMediaToDelete = lockedMemory.mediaPublicId
+            ? {
+              publicId: lockedMemory.mediaPublicId,
+              resourceType: getCloudinaryResourceType(lockedMemory.mediaType),
+            }
+            : null;
+
+          const savedMemory = await (transaction as any).memory.update({
+            where: { id: memoryId },
+            data: buildUpdateData(),
+            include: memoryWithTagsInclude,
+          });
+
+          return { savedMemory, oldMediaToDelete };
+        },
+      );
+      updatedMemory = replacementResult.savedMemory;
+
+      if (replacementResult.oldMediaToDelete) {
+        try {
+          await deleteMemoryImage(
+            replacementResult.oldMediaToDelete.publicId,
+            replacementResult.oldMediaToDelete.resourceType,
+          );
+        } catch (error) {
+          console.warn("Failed to delete replaced memory media", error);
+        }
+      }
+    } catch (error) {
+      await cleanupUploadedMemory(uploadedMedia);
+      throw error;
+    }
+  }
 
   try {
     await notifyUser({
@@ -368,7 +500,19 @@ export const updateUserMemory = async (
     console.warn("Failed to create update-memory notification", error);
   }
 
-  return updatedMemory;
+  if (mediaFile) {
+    try {
+      await notifyStorageThresholdCrossing(
+        userId,
+        previousUsedBytes,
+        nextUsedBytes,
+      );
+    } catch (error) {
+      console.warn("Failed to create storage threshold notification", error);
+    }
+  }
+
+  return serializeMemorySize(updatedMemory);
 };
 
 export const assignUserMemoryAlbum = async (
@@ -383,6 +527,14 @@ export const assignUserMemoryAlbum = async (
     },
     select: {
       id: true,
+      title: true,
+      albumId: true,
+      album: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -399,10 +551,44 @@ export const assignUserMemoryAlbum = async (
     data: {
       albumId: verifiedAlbumId ?? null,
     },
-    include: memoryWithTagsInclude,
+    include: {
+      ...memoryWithTagsInclude,
+      album: {
+        select: {
+          id: true,
+          name: true,
+          coverUrl: true,
+        },
+      },
+    },
   });
 
-  return updatedMemory;
+  if (memory.albumId !== (verifiedAlbumId ?? null)) {
+    try {
+      const albumName = updatedMemory.album?.name ?? memory.album?.name;
+
+      await notifyUser({
+        userId,
+        title: updatedMemory.albumId
+          ? "Memory added to album"
+          : "Memory removed from album",
+        message: updatedMemory.albumId
+          ? `"${updatedMemory.title}" was added to "${albumName ?? "an album"}".`
+          : `"${updatedMemory.title}" was removed from "${albumName ?? "its album"}".`,
+        category: "Albums",
+        type: updatedMemory.albumId ? "SUCCESS" : "INFO",
+        icon: "A",
+        actionType: "album",
+        actionId: updatedMemory.albumId ?? memory.album?.id ?? undefined,
+        groupKey: `memory-album:${updatedMemory.id}`,
+        canGroup: true,
+      });
+    } catch (error) {
+      console.warn("Failed to create memory album notification", error);
+    }
+  }
+
+  return serializeMemorySize(updatedMemory);
 };
 
 export const toggleFavoriteMemory = async (
@@ -449,7 +635,7 @@ export const toggleFavoriteMemory = async (
     console.warn("Failed to create favorite notification", error);
   }
 
-  return updatedMemory;
+  return serializeMemorySize(updatedMemory);
 };
 
 export const toggleArchiveMemory = async (userId: string, memoryId: string) => {
@@ -491,7 +677,7 @@ export const toggleArchiveMemory = async (userId: string, memoryId: string) => {
     console.warn("Failed to create archive notification", error);
   }
 
-  return updatedMemory;
+  return serializeMemorySize(updatedMemory);
 };
 
 export const searchMemoriesByQuery = async (userId: string, query: string) => {
@@ -568,5 +754,5 @@ Return format: ["id1", "id2", "id3"] or [] if none are relevant.`;
   // Filter memories to return only the relevant ones
   const relevantMemories = memories.filter((m) => relevantIds.includes(m.id));
 
-  return relevantMemories;
+  return relevantMemories.map(serializeMemorySize);
 };
