@@ -1,5 +1,5 @@
 import { motion, type Variants } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FeedbackDialog, { type FeedbackState } from "../components/FeedbackDialog";
 import {
   useAppearance,
@@ -13,12 +13,16 @@ import {
   requestChangeEmail,
   saveAuthUser,
 } from "../services/auth";
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  getNotificationPreferences,
+  NOTIFICATION_PREFERENCE_KEYS,
+  type NotificationPreferenceKey,
+  type NotificationPreferences,
+  updateNotificationPreferences,
+} from "../services/notificationPreferences";
 
 type ToggleKey =
-  | "memoryReminders"
-  | "onThisDay"
-  | "emailNotifications"
-  | "featureUpdates"
   | "privateProfile"
   | "hideArchived"
   | "confirmDelete"
@@ -78,25 +82,30 @@ function Toggle({
   checked,
   onChange,
   label,
+  mixed = false,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: () => void;
   label: string;
+  mixed?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={checked}
+      aria-checked={mixed ? "mixed" : checked}
       aria-label={label}
       onClick={onChange}
+      disabled={disabled}
       className={`relative h-7 w-12 rounded-full transition duration-300 ${
-        checked ? "bg-emerald-600" : "bg-slate-200"
+        checked || mixed ? "bg-emerald-600" : "bg-slate-200"
       }`}
     >
       <motion.span
         className="absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm"
-        animate={{ left: checked ? 24 : 4 }}
+        animate={{ left: mixed ? 14 : checked ? 24 : 4 }}
         transition={{ type: "spring", stiffness: 380, damping: 28 }}
       />
     </button>
@@ -108,11 +117,17 @@ function SettingRow({
   description,
   checked,
   onToggle,
+  mixed,
+  disabled,
+  badge,
 }: {
   title: string;
   description: string;
-  checked: boolean;
-  onToggle: () => void;
+  checked?: boolean;
+  onToggle?: () => void;
+  mixed?: boolean;
+  disabled?: boolean;
+  badge?: string;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4 transition duration-300 hover:bg-white hover:shadow-md hover:shadow-slate-950/5">
@@ -120,7 +135,19 @@ function SettingRow({
         <p className="text-sm font-semibold text-slate-950">{title}</p>
         <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
       </div>
-      <Toggle checked={checked} onChange={onToggle} label={title} />
+      {badge ? (
+        <span className="shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+          {badge}
+        </span>
+      ) : (
+        <Toggle
+          checked={Boolean(checked)}
+          onChange={onToggle ?? (() => undefined)}
+          label={title}
+          mixed={mixed}
+          disabled={disabled}
+        />
+      )}
     </div>
   );
 }
@@ -171,11 +198,14 @@ export default function SettingsPage() {
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
+  const [notificationPreferencesReady, setNotificationPreferencesReady] =
+    useState(false);
+  const [pendingNotificationFields, setPendingNotificationFields] = useState<
+    Set<NotificationPreferenceKey>
+  >(() => new Set());
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
-    memoryReminders: true,
-    onThisDay: true,
-    emailNotifications: false,
-    featureUpdates: true,
     privateProfile: true,
     hideArchived: true,
     confirmDelete: true,
@@ -183,11 +213,129 @@ export default function SettingsPage() {
     twoFactor: false,
   });
 
+  useEffect(() => {
+    const token = getStoredAuthToken();
+
+    if (!token) {
+      return;
+    }
+
+    let isActive = true;
+
+    getNotificationPreferences(token)
+      .then(({ preferences }) => {
+        if (isActive) {
+          setNotificationPreferences(preferences);
+          setNotificationPreferencesReady(true);
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setNotificationPreferencesReady(true);
+          setFeedback({
+            icon: "!",
+            title: "Could not load notification preferences",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Please try opening Settings again.",
+            type: "error",
+          });
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const toggleSetting = (key: ToggleKey) => {
     setToggles((current) => ({
       ...current,
       [key]: !current[key],
     }));
+  };
+
+  const saveNotificationPreferences = async (
+    updates: Partial<NotificationPreferences>,
+  ) => {
+    const token = getStoredAuthToken();
+    const fields = Object.keys(updates) as NotificationPreferenceKey[];
+    const previousValues = Object.fromEntries(
+      fields.map((field) => [field, notificationPreferences[field]]),
+    ) as Partial<NotificationPreferences>;
+
+    if (!token) {
+      setFeedback({
+        icon: "!",
+        title: "Session expired",
+        message: "Please sign in again to update notification preferences.",
+        type: "error",
+      });
+      return;
+    }
+
+    setNotificationPreferences((current) => ({ ...current, ...updates }));
+    setPendingNotificationFields((current) => {
+      const next = new Set(current);
+      fields.forEach((field) => next.add(field));
+      return next;
+    });
+
+    try {
+      await updateNotificationPreferences(token, updates);
+    } catch (error) {
+      setNotificationPreferences((current) => {
+        const next = { ...current };
+
+        fields.forEach((field) => {
+          if (current[field] === updates[field]) {
+            next[field] = previousValues[field] ?? true;
+          }
+        });
+
+        return next;
+      });
+      setFeedback({
+        icon: "!",
+        title: "Could not save notification preferences",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Your previous preferences have been restored.",
+        type: "error",
+      });
+    } finally {
+      setPendingNotificationFields((current) => {
+        const next = new Set(current);
+        fields.forEach((field) => next.delete(field));
+        return next;
+      });
+    }
+  };
+
+  const toggleNotificationPreference = (field: NotificationPreferenceKey) => {
+    void saveNotificationPreferences({
+      [field]: !notificationPreferences[field],
+    });
+  };
+
+  const enabledNotificationCount = NOTIFICATION_PREFERENCE_KEYS.filter(
+    (field) => notificationPreferences[field],
+  ).length;
+  const allNotificationsEnabled =
+    enabledNotificationCount === NOTIFICATION_PREFERENCE_KEYS.length;
+  const someNotificationsEnabled =
+    enabledNotificationCount > 0 && !allNotificationsEnabled;
+  const notificationsBusy = pendingNotificationFields.size > 0;
+
+  const toggleAllNotifications = () => {
+    const nextValue = !allNotificationsEnabled;
+    const updates = Object.fromEntries(
+      NOTIFICATION_PREFERENCE_KEYS.map((field) => [field, nextValue]),
+    ) as NotificationPreferences;
+
+    void saveNotificationPreferences(updates);
   };
 
   const handleChangeUsername = async (event: React.FormEvent) => {
@@ -493,31 +641,132 @@ export default function SettingsPage() {
             subtitle="Choose the reminders that feel useful."
           />
 
-          <div className="mt-6 space-y-3">
-            <SettingRow
-              title="Memory reminders"
-              description="Gentle nudges to preserve new moments."
-              checked={toggles.memoryReminders}
-              onToggle={() => toggleSetting("memoryReminders")}
-            />
-            <SettingRow
-              title="On this day reminders"
-              description="Revisit memories from past years."
-              checked={toggles.onThisDay}
-              onToggle={() => toggleSetting("onThisDay")}
-            />
-            <SettingRow
-              title="Email notifications"
-              description="Receive important account updates by email."
-              checked={toggles.emailNotifications}
-              onToggle={() => toggleSetting("emailNotifications")}
-            />
-            <SettingRow
-              title="New feature updates"
-              description="Hear about improvements as I-Nelory grows."
-              checked={toggles.featureUpdates}
-              onToggle={() => toggleSetting("featureUpdates")}
-            />
+          <div className="mt-6 space-y-6">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Master
+              </p>
+              <SettingRow
+                title="Enable All Notifications"
+                description={
+                  someNotificationsEnabled
+                    ? "Some enabled. Quickly enable or disable every optional notification category."
+                    : "Quickly enable or disable every optional notification category."
+                }
+                checked={allNotificationsEnabled}
+                mixed={someNotificationsEnabled}
+                disabled={!notificationPreferencesReady || notificationsBusy}
+                onToggle={toggleAllNotifications}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                In-App Activity
+              </p>
+              <SettingRow
+                title="Memory Activity"
+                description="Receive notifications when memories are created, edited, archived, restored, or deleted."
+                checked={notificationPreferences.notifyMemoryActivity}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyMemoryActivity")
+                }
+                onToggle={() =>
+                  toggleNotificationPreference("notifyMemoryActivity")
+                }
+              />
+              <SettingRow
+                title="Album Activity"
+                description="Receive notifications when albums are created, edited, or deleted."
+                checked={notificationPreferences.notifyAlbumActivity}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyAlbumActivity")
+                }
+                onToggle={() =>
+                  toggleNotificationPreference("notifyAlbumActivity")
+                }
+              />
+              <SettingRow
+                title="Favorite Activity"
+                description="Receive notifications when memories are added to or removed from Favorites."
+                checked={notificationPreferences.notifyFavoriteActivity}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyFavoriteActivity")
+                }
+                onToggle={() =>
+                  toggleNotificationPreference("notifyFavoriteActivity")
+                }
+              />
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Smart Features &amp; Reminders
+              </p>
+              <SettingRow
+                title="AI Search"
+                description="Receive notifications related to AI-powered memory search."
+                checked={notificationPreferences.notifyAiSearch}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyAiSearch")
+                }
+                onToggle={() => toggleNotificationPreference("notifyAiSearch")}
+              />
+              <SettingRow
+                title="Memory Reminders"
+                description="Gentle reminders to capture new memories."
+                checked={notificationPreferences.notifyMemoryReminders}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyMemoryReminders")
+                }
+                onToggle={() =>
+                  toggleNotificationPreference("notifyMemoryReminders")
+                }
+              />
+              <SettingRow
+                title="On This Day"
+                description="Revisit memories from previous years."
+                checked={notificationPreferences.notifyOnThisDay}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyOnThisDay")
+                }
+                onToggle={() => toggleNotificationPreference("notifyOnThisDay")}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                System
+              </p>
+              <SettingRow
+                title="Storage Alerts"
+                description="Receive notifications when storage usage or upload limits require your attention."
+                checked={notificationPreferences.notifyStorageAlerts}
+                disabled={
+                  !notificationPreferencesReady ||
+                  pendingNotificationFields.has("notifyStorageAlerts")
+                }
+                onToggle={() =>
+                  toggleNotificationPreference("notifyStorageAlerts")
+                }
+              />
+              <SettingRow
+                title="Account"
+                description="Notifications for email changes, account updates, and verification requests."
+                badge="Always enabled"
+              />
+              <SettingRow
+                title="Security"
+                description="Notifications for password changes, security events, and important account protection."
+                badge="Always enabled"
+              />
+            </div>
           </div>
         </motion.section>
 

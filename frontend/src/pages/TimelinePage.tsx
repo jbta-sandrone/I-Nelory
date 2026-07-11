@@ -411,7 +411,7 @@ export default function TimelinePage() {
       </motion.section>
 
       {/* Timeline Controls */}
-      <motion.section
+      {/* <motion.section
         variants={fadeUp}
         className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:p-5"
       >
@@ -467,7 +467,7 @@ export default function TimelinePage() {
             ))}
           </select>
         </div>
-      </motion.section>
+      </motion.section> */}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_8rem]">
         {/* Vertical Timeline */}

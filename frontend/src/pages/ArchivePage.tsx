@@ -595,7 +595,7 @@ export default function ArchivePage() {
       </motion.section>
 
       {/* Filter/Search Row */}
-      <motion.section
+    {/* <motion.section
         variants={fadeUp}
         className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5 sm:p-5"
       >
@@ -624,7 +624,7 @@ export default function ArchivePage() {
             <option>Oldest Archived</option>
           </select>
         </div>
-      </motion.section>
+      </motion.section> */}
 
       {/* Archived Memory Grid */}
       {isLoading ? (

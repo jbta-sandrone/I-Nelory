@@ -15,6 +15,7 @@ import {
   CreateMemoryRequest,
   UpdateMemoryRequest,
 } from "../types/memory.types.js";
+import { notifyUser } from "../services/notification.service.js";
 
 function parseRequestTags(value: unknown): string[] | undefined {
   if (value === undefined) {
@@ -217,6 +218,22 @@ export const aiSearch = async (req: AuthRequest, res: Response) => {
     }
 
     const memories = await searchMemoriesByQuery(req.userId!, query.trim());
+
+    try {
+      await notifyUser({
+        userId: req.userId!,
+        title: "AI search complete",
+        message: `Found ${memories.length} memories for your search.`,
+        category: "AI",
+        type: "INFO",
+        icon: "✨",
+        actionType: "ai-search",
+        groupKey: `ai-search:${req.userId!}`,
+        canGroup: true,
+      });
+    } catch (notificationError) {
+      console.warn("Failed to create AI search notification", notificationError);
+    }
 
     return res.json({
       message: "AI search completed successfully 💚",

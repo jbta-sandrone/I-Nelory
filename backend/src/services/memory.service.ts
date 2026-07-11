@@ -351,6 +351,23 @@ export const updateUserMemory = async (
     include: memoryWithTagsInclude,
   });
 
+  try {
+    await notifyUser({
+      userId,
+      title: "Memory updated",
+      message: `Your memory "${updatedMemory.title}" was updated.`,
+      category: "Memories",
+      type: "SUCCESS",
+      icon: "📝",
+      actionType: "memory",
+      actionId: updatedMemory.id,
+      groupKey: `memory-updated:${updatedMemory.id}`,
+      canGroup: true,
+    });
+  } catch (error) {
+    console.warn("Failed to create update-memory notification", error);
+  }
+
   return updatedMemory;
 };
 

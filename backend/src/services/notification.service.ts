@@ -1,4 +1,8 @@
 import { prisma } from "../config/prisma.js";
+import {
+  areNotificationPreferencesEnabled,
+  type NotificationPreferenceField,
+} from "./notification-preference.service.js";
 
 const GROUP_WINDOW_MS = 2 * 60 * 1000;
 const NOTIFICATION_LIMIT = 1000;
@@ -13,6 +17,18 @@ export type NotificationCategory =
   | "Security"
   | "Reminder"
   | "Storage";
+
+const categoryPreferenceFields: Partial<
+  Record<NotificationCategory, NotificationPreferenceField[]>
+> = {
+  Memories: ["notifyMemoryActivity"],
+  Albums: ["notifyAlbumActivity"],
+  Favorites: ["notifyFavoriteActivity"],
+  Archive: ["notifyMemoryActivity"],
+  AI: ["notifyAiSearch"],
+  Reminder: ["notifyMemoryReminders"],
+  Storage: ["notifyStorageAlerts"],
+};
 
 function buildGroupedTitle(title: string, count: number) {
   const trimmedTitle = title.trim();
@@ -91,6 +107,7 @@ export const createNotification = async ({
   actionId,
   groupKey,
   canGroup,
+  preferenceKey,
 }: {
   userId: string;
   title: string;
@@ -102,10 +119,27 @@ export const createNotification = async ({
   actionId?: string | null;
   groupKey?: string | null;
   canGroup?: boolean;
+  preferenceKey?: NotificationPreferenceField;
 }) => {
   const notificationCategory = category || "Account";
   const notificationType = type || "INFO";
   const notificationIcon = icon || "🔔";
+
+  const preferenceFields =
+    notificationCategory === "Account" || notificationCategory === "Security"
+      ? undefined
+      : preferenceKey
+        ? [preferenceKey]
+        : notificationCategory === "Reminder" && actionType === "on-this-day"
+          ? ["notifyOnThisDay" as NotificationPreferenceField]
+          : categoryPreferenceFields[notificationCategory];
+
+  if (
+    preferenceFields &&
+    !(await areNotificationPreferencesEnabled(userId, preferenceFields))
+  ) {
+    return null;
+  }
 
   if (canGroup && groupKey) {
     const cutoff = new Date(Date.now() - GROUP_WINDOW_MS);

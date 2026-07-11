@@ -6,6 +6,10 @@
   color-scheme: light;
 }
 
+.public-light-theme {
+  color-scheme: light;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -68,16 +72,6 @@ body {
 
 .dark .play-button {
   background-color: rgba(32, 150, 106, 0.9) !important;
-}
-.dark .personal {
-  background-color: #1e293b !important;
-}
-
-.dark .landing-card:hover {
-  background-color: rgba(15, 23, 42, 0.78) !important;
-}
-.dark .returned {
-  background-color: red !important;
 }
 
 

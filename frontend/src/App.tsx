@@ -30,6 +30,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotificationPage from "./pages/NotificationPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import AuthGuard from "./components/AuthGuard";
+import PublicLightLayout from "./components/PublicLightLayout";
 
 function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
@@ -97,9 +98,20 @@ function App() {
         <Routes>
           <Route
             path="/"
-            element={<LandingPage onLoginSuccess={setAuthUser} />}
+            element={
+              <PublicLightLayout>
+                <LandingPage onLoginSuccess={setAuthUser} />
+              </PublicLightLayout>
+            }
           />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route
+            path="/verify-email"
+            element={
+              <PublicLightLayout>
+                <VerifyEmailPage />
+              </PublicLightLayout>
+            }
+          />
           <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>}>
             <Route index element={<HomePage />} />
             <Route path="memories" element={<MemoriesPage />} />

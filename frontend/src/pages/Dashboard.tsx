@@ -462,20 +462,7 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        <div
-          className={`overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-4 transition-all duration-300 ease-in-out ${
-            isSidebarHovered
-              ? "lg:max-h-40 lg:opacity-100"
-              : "lg:max-h-0 lg:border-transparent lg:p-0 lg:opacity-0"
-          }`}
-        >
-          <p className="text-sm font-semibold text-slate-950">
-            Memory archive
-          </p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            Dashboard v1 shell is ready. Pages come next.
-          </p>
-        </div>
+        
       </aside>
 
       <div

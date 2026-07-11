@@ -97,6 +97,23 @@ export const updateUserAlbum = async (
     throw new Error("Album not found");
   }
 
+  try {
+    await notifyUser({
+      userId,
+      title: "Album updated",
+      message: `Your album "${album.name}" was updated.`,
+      category: "Albums",
+      type: "SUCCESS",
+      icon: "🗂️",
+      actionType: "album",
+      actionId: album.id,
+      groupKey: `album-updated:${album.id}`,
+      canGroup: true,
+    });
+  } catch (error) {
+    console.warn("Failed to create album update notification", error);
+  }
+
   return album;
 };
 
@@ -181,6 +198,23 @@ export const updateUserAlbumCover = async (
     include: albumListInclude,
   });
 
+  try {
+    await notifyUser({
+      userId,
+      title: "Album updated",
+      message: `The cover for "${updatedAlbum.name}" was updated.`,
+      category: "Albums",
+      type: "SUCCESS",
+      icon: "🗂️",
+      actionType: "album",
+      actionId: updatedAlbum.id,
+      groupKey: `album-updated:${updatedAlbum.id}`,
+      canGroup: true,
+    });
+  } catch (error) {
+    console.warn("Failed to create album cover notification", error);
+  }
+
   return updatedAlbum;
 };
 
@@ -219,6 +253,20 @@ export const deleteUserAlbum = async (userId: string, albumId: string) => {
       },
     }),
   ]);
+
+  try {
+    await notifyUser({
+      userId,
+      title: "Album deleted",
+      message: `Your album "${album.name}" was deleted.`,
+      category: "Albums",
+      type: "WARNING",
+      icon: "🗂️",
+      actionType: "albums",
+    });
+  } catch (error) {
+    console.warn("Failed to create album deletion notification", error);
+  }
 
   return album;
 };

@@ -14,6 +14,7 @@ import iNeloryLogo from "../assets/images/I-Nelory-logo.png";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import type { AuthUser } from "../services/auth";
+import { useAppearance } from "../context/AppearanceContext";
 
   const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -281,6 +282,8 @@ function FeatureIcon({ name }: { name: string }) {
 function LoadingTransition() {
   const [messageIndex, setMessageIndex] = useState(0);
   const [dotCount, setDotCount] = useState(1);
+  const { resolvedTheme } = useAppearance();
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -300,22 +303,42 @@ function LoadingTransition() {
 
   return (
     <motion.div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-white px-6"
+      className={`fixed inset-0 z-[120] flex items-center justify-center px-6 ${
+        isDark ? "bg-slate-950" : "bg-white"
+      }`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.14),transparent_34%),radial-gradient(circle_at_30%_70%,rgba(15,23,42,0.06),transparent_24%)]" />
-      <div className="absolute left-1/4 top-1/4 h-64 w-64 rounded-full bg-emerald-100/50 blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 h-72 w-72 rounded-full bg-slate-100/80 blur-3xl" />
+      <div
+        className={`absolute inset-0 ${
+          isDark
+            ? "bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.18),transparent_34%),radial-gradient(circle_at_30%_70%,rgba(148,163,184,0.10),transparent_24%)]"
+            : "bg-[radial-gradient(circle_at_50%_40%,rgba(16,185,129,0.14),transparent_34%),radial-gradient(circle_at_30%_70%,rgba(15,23,42,0.06),transparent_24%)]"
+        }`}
+      />
+      <div
+        className={`absolute left-1/4 top-1/4 h-64 w-64 rounded-full blur-3xl ${
+          isDark ? "bg-emerald-950/40" : "bg-emerald-100/50"
+        }`}
+      />
+      <div
+        className={`absolute bottom-1/4 right-1/4 h-72 w-72 rounded-full blur-3xl ${
+          isDark ? "bg-slate-900/80" : "bg-slate-100/80"
+        }`}
+      />
 
       <div className="relative w-full max-w-md text-center">
         <div className="relative mx-auto h-40 w-56">
           {loadingMemoryElements.map((element) => (
             <motion.div
               key={`${element.icon}-${element.x}`}
-              className="absolute left-1/2 top-1/2 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 text-lg text-emerald-600 shadow-xl shadow-slate-950/10 backdrop-blur-sm"
+              className={`absolute left-1/2 top-1/2 flex h-12 w-12 items-center justify-center rounded-2xl border text-lg shadow-xl backdrop-blur-sm ${
+                isDark
+                  ? "border-white/10 bg-slate-900/90 text-emerald-400 shadow-black/25"
+                  : "border-slate-200 bg-white/90 text-emerald-600 shadow-slate-950/10"
+              }`}
               initial={{
                 opacity: 0,
                 x: "-50%",
@@ -344,7 +367,11 @@ function LoadingTransition() {
           {[0, 1, 2].map((card) => (
             <motion.div
               key={card}
-              className="absolute left-1/2 top-1/2 h-28 w-24 rounded-[1.25rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/10"
+              className={`absolute left-1/2 top-1/2 h-28 w-24 rounded-[1.25rem] border shadow-xl ${
+                isDark
+                  ? "border-slate-700 bg-slate-900 shadow-black/25"
+                  : "border-slate-200 bg-white shadow-slate-950/10"
+              }`}
               initial={{
                 opacity: 0,
                 x: "-50%",
@@ -379,9 +406,21 @@ function LoadingTransition() {
                 ease: easeOut,
               }}
             >
-              <div className="m-3 h-16 rounded-2xl bg-emerald-50" />
-              <div className="mx-3 h-2 rounded-full bg-slate-100" />
-              <div className="mx-3 mt-2 h-2 w-2/3 rounded-full bg-slate-100" />
+              <div
+                className={`m-3 h-16 rounded-2xl ${
+                  isDark ? "bg-emerald-950/60" : "bg-emerald-50"
+                }`}
+              />
+              <div
+                className={`mx-3 h-2 rounded-full ${
+                  isDark ? "bg-slate-700" : "bg-slate-100"
+                }`}
+              />
+              <div
+                className={`mx-3 mt-2 h-2 w-2/3 rounded-full ${
+                  isDark ? "bg-slate-700" : "bg-slate-100"
+                }`}
+              />
             </motion.div>
           ))}
         </div>
@@ -397,7 +436,9 @@ function LoadingTransition() {
         <div className="mt-4 min-h-16">
           <AnimatePresence mode="wait">
             <motion.p
-              className="text-2xl font-semibold tracking-tight text-slate-950"
+              className={`text-2xl font-semibold tracking-tight ${
+                isDark ? "text-slate-100" : "text-slate-950"
+              }`}
               key={loadingMessages[messageIndex]}
               initial={{ opacity: 0, y: 12, filter: "blur(4px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -410,7 +451,11 @@ function LoadingTransition() {
           </AnimatePresence>
         </div>
 
-        <div className="relative mx-auto mt-8 h-2 max-w-xs overflow-hidden rounded-full bg-slate-100 shadow-inner">
+        <div
+          className={`relative mx-auto mt-8 h-2 max-w-xs overflow-hidden rounded-full shadow-inner ${
+            isDark ? "bg-slate-800" : "bg-slate-100"
+          }`}
+        >
           <motion.div
             className="relative h-full rounded-full bg-emerald-600 shadow-[0_0_24px_rgba(16,185,129,0.45)]"
             initial={{ width: "0%" }}
@@ -580,7 +625,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
           >
             <motion.span
               variants={fadeUp}
-              className="personal inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
+              className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
             >
               Your Personal Digital Memory.
             </motion.span>
@@ -730,7 +775,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                   variants={fadeUp}
                   whileHover={{ y: -8, scale: 1.025 }}
                   transition={{ duration: 0.35 }}
-                  className="landing-card overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm hover:shadow-2xl hover:bg-white/60"
+                  className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm hover:shadow-2xl hover:bg-white/60"
                 >
                   <img
                     src={card.image}
@@ -784,7 +829,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                 variants={fadeUp}
                 whileHover={{ y: -8, scale: 1.025 }}
                 transition={{ duration: 0.35 }}
-                className="landing-card rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:bg-white/60"
+                className="rounded-[1.75rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:shadow-xl hover:bg-white/60"
               >
                 <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
                   <FeatureIcon name={feature.icon} />
@@ -895,7 +940,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                   variants={fadeUp}
                   whileHover={{ x: 8, scale: 1.01 }}
                   transition={{ duration: 0.35 }}
-                  className="landing-card rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
+                  className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
                 >
                   <div className="flex gap-5">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-semibold text-emerald-700">

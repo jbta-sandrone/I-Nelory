@@ -14,6 +14,17 @@ export type ResolvedTheme = "light" | "dark";
 const THEME_STORAGE_KEY = "i-nelory.appearance.theme";
 const COMPACT_STORAGE_KEY = "i-nelory.appearance.compact";
 const THEME_OPTIONS: ThemePreference[] = ["light", "dark", "system"];
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/login",
+  "/register",
+  "/signup",
+  "/verify-email",
+  "/forgot-password",
+  "/reset-password",
+  "/terms",
+  "/privacy",
+]);
 
 type AppearanceContextValue = {
   themePreference: ThemePreference;
@@ -65,13 +76,39 @@ function resolveTheme(themePreference: ThemePreference): ResolvedTheme {
   return themePreference === "system" ? getSystemTheme() : themePreference;
 }
 
+function isPublicPath() {
+  return canUseDOM() && PUBLIC_PATHS.has(window.location.pathname);
+}
+
+function isPublicLightThemeActive() {
+  return (
+    canUseDOM() &&
+    document.documentElement.hasAttribute("data-public-light-theme")
+  );
+}
+
+function setPublicLightThemeActive(isActive: boolean) {
+  if (!canUseDOM()) {
+    return;
+  }
+
+  document.documentElement.toggleAttribute("data-public-light-theme", isActive);
+
+  if (isActive) {
+    document.documentElement.classList.remove("dark", "compact");
+    document.documentElement.style.colorScheme = "light";
+  }
+}
+
 function applyThemeClass(resolvedTheme: ResolvedTheme) {
   if (!canUseDOM()) {
     return;
   }
 
-  document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
-  document.documentElement.style.colorScheme = resolvedTheme;
+  const appliedTheme = isPublicLightThemeActive() ? "light" : resolvedTheme;
+
+  document.documentElement.classList.toggle("dark", appliedTheme === "dark");
+  document.documentElement.style.colorScheme = appliedTheme;
 }
 
 function applyCompactClass(compactMode: boolean) {
@@ -79,10 +116,15 @@ function applyCompactClass(compactMode: boolean) {
     return;
   }
 
-  document.documentElement.classList.toggle("compact", compactMode);
+  document.documentElement.classList.toggle(
+    "compact",
+    compactMode && !isPublicLightThemeActive(),
+  );
 }
 
 export function initializeAppearance() {
+  setPublicLightThemeActive(isPublicPath());
+
   const themePreference = getStoredThemePreference();
 
   applyThemeClass(resolveTheme(themePreference));
