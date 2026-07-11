@@ -16,6 +16,7 @@ import {
   UpdateMemoryRequest,
 } from "../types/memory.types.js";
 import { notifyUser } from "../services/notification.service.js";
+import { getPrivacyPreferences } from "../services/privacy-preference.service.js";
 
 function parseRequestTags(value: unknown): string[] | undefined {
   if (value === undefined) {
@@ -209,6 +210,14 @@ export const toggleArchive = async (req: AuthRequest, res: Response) => {
 };
 export const aiSearch = async (req: AuthRequest, res: Response) => {
   try {
+    const { allowAiSearch } = await getPrivacyPreferences(req.userId!);
+
+    if (!allowAiSearch) {
+      return res.status(403).json({
+        message: "AI Search is disabled in your Privacy Settings.",
+      });
+    }
+
     const { query } = req.body as { query: string };
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {

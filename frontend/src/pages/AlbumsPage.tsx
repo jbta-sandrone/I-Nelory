@@ -10,6 +10,7 @@ import {
   startActionTransition,
   waitForActionTransition,
 } from "../utils/actionTransition";
+import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 
 type Album = {
   id: string;
@@ -307,6 +308,7 @@ function AlbumCard({
 }
 
 export default function AlbumsPage() {
+  const { preferences: privacyPreferences } = usePrivacyPreferences();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -519,6 +521,12 @@ export default function AlbumsPage() {
   const openDeleteConfirmation = (album: Album) => {
     setOpenMenuId(null);
     setDeleteErrorMessage("");
+
+    if (!privacyPreferences.confirmBeforeDelete) {
+      void handleDeleteAlbum(album);
+      return;
+    }
+
     setAlbumToDelete(album);
   };
 
@@ -637,8 +645,10 @@ export default function AlbumsPage() {
     }
   };
 
-  const handleDeleteAlbum = async () => {
-    if (!albumToDelete) {
+  const handleDeleteAlbum = async (targetAlbum?: Album | null) => {
+    const album = targetAlbum ?? albumToDelete;
+
+    if (!album) {
       return;
     }
 
@@ -667,7 +677,7 @@ export default function AlbumsPage() {
     try {
       const response = await fetch(
         `http://localhost:5000/api/albums/${encodeURIComponent(
-          albumToDelete.id,
+          album.id,
         )}`,
         {
           method: "DELETE",
@@ -688,7 +698,7 @@ export default function AlbumsPage() {
       await waitForActionTransition(transitionStartedAt);
       setIsActionTransitioning(false);
       setAlbums((currentAlbums) =>
-        currentAlbums.filter((album) => album.id !== albumToDelete.id),
+        currentAlbums.filter((currentAlbum) => currentAlbum.id !== album.id),
       );
       setAlbumToDelete(null);
       setFeedback({
@@ -1138,7 +1148,7 @@ export default function AlbumsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleDeleteAlbum}
+                  onClick={() => void handleDeleteAlbum()}
                   disabled={isDeleting}
                   className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-red-600/15 transition duration-300 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
                 >

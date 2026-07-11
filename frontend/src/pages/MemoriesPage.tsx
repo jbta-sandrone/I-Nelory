@@ -20,6 +20,7 @@ import {
   formatMoodLabel,
   getMemoryTagNames,
 } from "../utils/memoryMetadata";
+import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -374,6 +375,7 @@ function compareDates(first?: string | null, second?: string | null) {
 }
 
 export default function MemoriesPage() {
+  const { preferences: privacyPreferences } = usePrivacyPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -959,6 +961,12 @@ export default function MemoriesPage() {
   const openDeleteConfirmation = (memory: Memory) => {
     setOpenMenuId(null);
     setDeleteErrorMessage("");
+
+    if (!privacyPreferences.confirmBeforeDelete) {
+      void handleDeleteMemory(memory);
+      return;
+    }
+
     setMemoryToDelete(memory);
   };
 
@@ -969,8 +977,10 @@ export default function MemoriesPage() {
     }
   };
 
-  const handleDeleteMemory = async () => {
-    if (!memoryToDelete) {
+  const handleDeleteMemory = async (targetMemory?: Memory | null) => {
+    const memory = targetMemory ?? memoryToDelete;
+
+    if (!memory) {
       return;
     }
 
@@ -983,7 +993,16 @@ export default function MemoriesPage() {
     if (!token) {
       await waitForActionTransition(transitionStartedAt);
       setIsActionTransitioning(false);
-      setDeleteErrorMessage("Missing authentication token. Please log in again.");
+      const message = "Missing authentication token. Please log in again.";
+      setDeleteErrorMessage(message);
+      if (!privacyPreferences.confirmBeforeDelete) {
+        showFeedback({
+          icon: "!",
+          title: "Delete failed",
+          message,
+          type: "error",
+        });
+      }
       return;
     }
 
@@ -992,7 +1011,7 @@ export default function MemoriesPage() {
     try {
       const response = await fetch(
         `http://localhost:5000/api/memories/${encodeURIComponent(
-          memoryToDelete.id,
+          memory.id,
         )}`,
         {
           method: "DELETE",
@@ -1013,7 +1032,7 @@ export default function MemoriesPage() {
       await waitForActionTransition(transitionStartedAt);
       setIsActionTransitioning(false);
       setMemories((currentMemories) =>
-        currentMemories.filter((memory) => memory.id !== memoryToDelete.id),
+        currentMemories.filter((currentMemory) => currentMemory.id !== memory.id),
       );
       setMemoryToDelete(null);
       showFeedback({
@@ -1028,6 +1047,14 @@ export default function MemoriesPage() {
         error instanceof Error ? error.message : "Failed to delete memory.";
       console.error("Delete memory failed:", error);
       setDeleteErrorMessage(message);
+      if (!privacyPreferences.confirmBeforeDelete) {
+        showFeedback({
+          icon: "!",
+          title: "Delete failed",
+          message,
+          type: "error",
+        });
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -1684,7 +1711,7 @@ export default function MemoriesPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleDeleteMemory}
+                  onClick={() => void handleDeleteMemory()}
                   disabled={isDeleting}
                   className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-red-600/15 transition duration-300 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
                 >

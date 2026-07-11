@@ -8,6 +8,7 @@ import albumRoutes from "./routes/album.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import notificationPreferenceRoutes from "./routes/notification-preference.routes.js";
+import privacyPreferenceRoutes from "./routes/privacy-preference.routes.js";
 
 const app = express();
 
@@ -30,5 +31,6 @@ app.use("/api/albums", albumRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/notification-preferences", notificationPreferenceRoutes);
+app.use("/api/privacy-preferences", privacyPreferenceRoutes);
 
 export default app;

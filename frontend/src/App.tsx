@@ -31,6 +31,7 @@ import NotificationPage from "./pages/NotificationPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import AuthGuard from "./components/AuthGuard";
 import PublicLightLayout from "./components/PublicLightLayout";
+import { PrivacyPreferenceProvider } from "./context/PrivacyPreferenceContext";
 
 function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
@@ -112,7 +113,16 @@ function App() {
               </PublicLightLayout>
             }
           />
-          <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>}>
+          <Route
+            path="/dashboard"
+            element={
+              <AuthGuard>
+                <PrivacyPreferenceProvider>
+                  <Dashboard />
+                </PrivacyPreferenceProvider>
+              </AuthGuard>
+            }
+          >
             <Route index element={<HomePage />} />
             <Route path="memories" element={<MemoriesPage />} />
             <Route path="timeline" element={<TimelinePage />} />

@@ -1,7 +1,9 @@
 import { motion, type Variants } from "framer-motion";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import MemoryMedia from "../components/MemoryMedia";
 import { getMemoryTagNames, type ApiTag } from "../utils/memoryMetadata";
+import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -181,6 +183,11 @@ async function aiSearchMemories(
 }
 
 export default function AISearchPage() {
+  const {
+    preferences: privacyPreferences,
+    isLoading: privacyPreferencesLoading,
+    loadError: privacyPreferencesLoadError,
+  } = usePrivacyPreferences();
   const [searchText, setSearchText] = useState("");
   const [allMemories, setAllMemories] = useState<SearchResult[]>([]);
   const [filteredResults, setFilteredResults] = useState<SearchResult[]>([]);
@@ -192,6 +199,14 @@ export default function AISearchPage() {
 
   // Fetch memories on mount
   useEffect(() => {
+    if (
+      privacyPreferencesLoading ||
+      privacyPreferencesLoadError ||
+      !privacyPreferences.allowAiSearch
+    ) {
+      return;
+    }
+
     const controller = new AbortController();
 
     async function fetchMemories() {
@@ -244,11 +259,19 @@ export default function AISearchPage() {
     fetchMemories();
 
     return () => controller.abort();
-  }, []);
+  }, [
+    privacyPreferences.allowAiSearch,
+    privacyPreferencesLoadError,
+    privacyPreferencesLoading,
+  ]);
 
-  // Handle search - only triggered by explicit user action
-  const handleSearch = async () => {
-    if (!searchText.trim()) {
+  const runAiSearch = async (query: string) => {
+    if (
+      privacyPreferencesLoading ||
+      privacyPreferencesLoadError ||
+      !privacyPreferences.allowAiSearch ||
+      !query.trim()
+    ) {
       return;
     }
 
@@ -263,7 +286,7 @@ export default function AISearchPage() {
         throw new Error("Missing authentication token. Please log in again.");
       }
 
-      const results = await aiSearchMemories(searchText, token);
+      const results = await aiSearchMemories(query, token);
       setFilteredResults(results);
     } catch (error) {
       setFilteredResults([]);
@@ -275,6 +298,11 @@ export default function AISearchPage() {
     }
   };
 
+  // Handle search - only triggered by explicit user action
+  const handleSearch = () => {
+    void runAiSearch(searchText);
+  };
+
   // Handle Enter key in search input
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !isSearching) {
@@ -282,6 +310,58 @@ export default function AISearchPage() {
       handleSearch();
     }
   };
+
+  if (privacyPreferencesLoading) {
+    return (
+      <div className="mx-auto w-full max-w-7xl pb-8">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-10 text-center shadow-sm shadow-slate-950/5">
+          <p className="text-sm font-medium text-slate-500">
+            Loading AI Search preferences...
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  if (privacyPreferencesLoadError || !privacyPreferences.allowAiSearch) {
+    return (
+      <motion.div
+        className="mx-auto w-full max-w-7xl space-y-6 overflow-x-hidden pb-8"
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainer}
+      >
+        <motion.section
+          variants={fadeUp}
+          className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm shadow-slate-950/5 sm:p-10"
+        >
+          <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-emerald-100/70 blur-3xl" />
+          <div className="relative">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl text-emerald-700">
+              ✦
+            </div>
+            <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">
+              AI Search unavailable
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              AI Search is disabled
+            </h1>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+              {privacyPreferencesLoadError
+                ? "Your Privacy Settings could not be loaded, so AI Search has been paused."
+                : "AI Search is disabled in Privacy Settings. Enable it there when you want I-Nelory to analyze your memory details."}
+            </p>
+            <Link
+              to="/dashboard/settings"
+              className="mt-7 inline-flex rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700"
+            >
+              Open Privacy Settings
+            </Link>
+          </div>
+        </motion.section>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -369,30 +449,7 @@ export default function AISearchPage() {
                   type="button"
                   onClick={() => {
                     setSearchText(prompt);
-                    setTimeout(() => {
-                      // Trigger search with the new text
-                      setHasSearched(true);
-                      setIsSearching(true);
-                      setSearchError("");
-                      
-                      (async () => {
-                        try {
-                          const token = getStoredToken();
-                          if (!token) {
-                            throw new Error("Missing authentication token. Please log in again.");
-                          }
-                          const results = await aiSearchMemories(prompt, token);
-                          setFilteredResults(results);
-                        } catch (error) {
-                          setFilteredResults([]);
-                          setSearchError(
-                            error instanceof Error ? error.message : "Search failed. Please try again.",
-                          );
-                        } finally {
-                          setIsSearching(false);
-                        }
-                      })();
-                    }, 0);
+                    void runAiSearch(prompt);
                   }}
                   className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed"
                   disabled={isSearching}
@@ -643,30 +700,7 @@ export default function AISearchPage() {
                   type="button"
                   onClick={() => {
                     setSearchText(prompt);
-                    setTimeout(() => {
-                      // Trigger search with the new text
-                      setHasSearched(true);
-                      setIsSearching(true);
-                      setSearchError("");
-                      
-                      (async () => {
-                        try {
-                          const token = getStoredToken();
-                          if (!token) {
-                            throw new Error("Missing authentication token. Please log in again.");
-                          }
-                          const results = await aiSearchMemories(prompt, token);
-                          setFilteredResults(results);
-                        } catch (error) {
-                          setFilteredResults([]);
-                          setSearchError(
-                            error instanceof Error ? error.message : "Search failed. Please try again.",
-                          );
-                        } finally {
-                          setIsSearching(false);
-                        }
-                      })();
-                    }, 0);
+                    void runAiSearch(prompt);
                   }}
                   className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed"
                   disabled={isSearching}

@@ -12,6 +12,7 @@ import type { ApiMemory } from "../components/NewMemoryModal";
 import MemoryMedia from "../components/MemoryMedia";
 import MemoryViewerModal from "../components/MemoryViewerModal";
 import { getMemoryTagNames } from "../utils/memoryMetadata";
+import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 
 type ArchiveAction = "restore" | "delete" | null;
 
@@ -239,6 +240,7 @@ function ConfirmationModal({
 }
 
 export default function ArchivePage() {
+  const { preferences: privacyPreferences } = usePrivacyPreferences();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [archivedMemories, setArchivedMemories] = useState<ArchivedMemory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -766,7 +768,13 @@ export default function ArchivePage() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openModal(memory, "delete");
+                              setOpenMenuId(null);
+
+                              if (privacyPreferences.confirmBeforeDelete) {
+                                openModal(memory, "delete");
+                              } else {
+                                void deleteArchivedMemory(memory);
+                              }
                             }}
                             className="block w-full rounded-xl px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
                           >

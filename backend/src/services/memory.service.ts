@@ -501,7 +501,14 @@ export const searchMemoriesByQuery = async (userId: string, query: string) => {
       userId,
       isArchived: false,
     },
-    include: memoryWithTagsInclude,
+    include: {
+      ...memoryWithTagsInclude,
+      album: {
+        select: {
+          name: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -519,7 +526,7 @@ export const searchMemoriesByQuery = async (userId: string, query: string) => {
   const memoryText = memories
     .map(
       (m) =>
-        `ID: ${m.id}\nTitle: ${m.title}\nDescription: ${m.description || ""}\nMood: ${m.location || ""}\nTags: ${m.tags.map((tag) => tag.name).join(", ")}\nDate: ${m.memoryDate ? m.memoryDate.toISOString() : "Unknown"}\n`,
+        `ID: ${m.id}\nTitle: ${m.title}\nDescription: ${m.description || ""}\nMood: ${m.location || ""}\nAlbum: ${m.album?.name || ""}\nTags: ${m.tags.map((tag) => tag.name).join(", ")}\nDate: ${m.memoryDate ? m.memoryDate.toISOString() : "Unknown"}\n`,
     )
     .join("\n---\n");
 

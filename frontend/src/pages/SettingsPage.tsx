@@ -6,6 +6,7 @@ import {
   type ThemePreference,
 } from "../context/AppearanceContext";
 import { useAuth } from "../context/AuthContext";
+import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 import {
   changePassword,
   changeUsername,
@@ -22,12 +23,7 @@ import {
   updateNotificationPreferences,
 } from "../services/notificationPreferences";
 
-type ToggleKey =
-  | "privateProfile"
-  | "hideArchived"
-  | "confirmDelete"
-  | "aiSearchPermission"
-  | "twoFactor";
+type ToggleKey = "twoFactor";
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -184,6 +180,13 @@ export default function SettingsPage() {
     compactMode,
     setCompactMode,
   } = useAppearance();
+  const {
+    preferences: privacyPreferences,
+    isLoading: privacyPreferencesLoading,
+    loadError: privacyPreferencesLoadError,
+    pendingFields: pendingPrivacyFields,
+    savePreferences: savePrivacyPreferences,
+  } = usePrivacyPreferences();
   const [isUsernameModalOpen, setIsUsernameModalOpen] = useState(false);
   const [usernameForm, setUsernameForm] = useState({ username: authUser?.username ?? "" });
   const [isChangingUsername, setIsChangingUsername] = useState(false);
@@ -206,10 +209,6 @@ export default function SettingsPage() {
     Set<NotificationPreferenceKey>
   >(() => new Set());
   const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
-    privateProfile: true,
-    hideArchived: true,
-    confirmDelete: true,
-    aiSearchPermission: true,
     twoFactor: false,
   });
 
@@ -249,11 +248,42 @@ export default function SettingsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (privacyPreferencesLoadError) {
+      setFeedback({
+        icon: "!",
+        title: "Could not load privacy preferences",
+        message: privacyPreferencesLoadError,
+        type: "error",
+      });
+    }
+  }, [privacyPreferencesLoadError]);
+
   const toggleSetting = (key: ToggleKey) => {
     setToggles((current) => ({
       ...current,
       [key]: !current[key],
     }));
+  };
+
+  const togglePrivacyPreference = async (
+    field: "confirmBeforeDelete" | "allowAiSearch",
+  ) => {
+    try {
+      await savePrivacyPreferences({
+        [field]: !privacyPreferences[field],
+      });
+    } catch (error) {
+      setFeedback({
+        icon: "!",
+        title: "Could not save privacy preferences",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Your previous privacy preference has been restored.",
+        type: "error",
+      });
+    }
   };
 
   const saveNotificationPreferences = async (
@@ -785,28 +815,28 @@ export default function SettingsPage() {
 
           <div className="mt-6 space-y-3">
             <SettingRow
-              title="Private profile"
-              description="Keep your personal profile hidden from others."
-              checked={toggles.privateProfile}
-              onToggle={() => toggleSetting("privateProfile")}
-            />
-            <SettingRow
-              title="Hide archived memories"
-              description="Keep archived items out of main views."
-              checked={toggles.hideArchived}
-              onToggle={() => toggleSetting("hideArchived")}
-            />
-            <SettingRow
               title="Require confirmation before deleting"
-              description="Show a safety prompt before permanent actions."
-              checked={toggles.confirmDelete}
-              onToggle={() => toggleSetting("confirmDelete")}
+              description="Show a confirmation dialog before permanently deleting memories or albums."
+              checked={privacyPreferences.confirmBeforeDelete}
+              disabled={
+                privacyPreferencesLoading ||
+                Boolean(privacyPreferencesLoadError) ||
+                pendingPrivacyFields.has("confirmBeforeDelete")
+              }
+              onToggle={() =>
+                void togglePrivacyPreference("confirmBeforeDelete")
+              }
             />
             <SettingRow
-              title="AI search permission"
-              description="Allow search UI to use captions, tags, and metadata."
-              checked={toggles.aiSearchPermission}
-              onToggle={() => toggleSetting("aiSearchPermission")}
+              title="AI Search permission"
+              description="Allow AI Search to analyze your memory captions, tags, moods, album names, and dates."
+              checked={privacyPreferences.allowAiSearch}
+              disabled={
+                privacyPreferencesLoading ||
+                Boolean(privacyPreferencesLoadError) ||
+                pendingPrivacyFields.has("allowAiSearch")
+              }
+              onToggle={() => void togglePrivacyPreference("allowAiSearch")}
             />
           </div>
         </motion.section>
