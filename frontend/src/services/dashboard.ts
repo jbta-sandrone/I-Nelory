@@ -1,8 +1,5 @@
 import type { ApiTag } from "../utils/memoryMetadata";
-
-const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const API_URL = rawApiUrl.replace(/\/$/, "");
-const API_BASE_URL = API_URL.endsWith("/api") ? API_URL : `${API_URL}/api`;
+import { API_BASE_URL } from "../config/api";
 
 export type DashboardMemory = {
   id: string;
@@ -58,7 +55,7 @@ function getStoredToken() {
 export async function getDashboardSummary(token?: string | null) {
   const authToken = token || getStoredToken();
 
-  const response = await fetch(`${API_BASE_URL}/dashboard/summary`, {
+  const response = await fetch(`${API_BASE_URL}/api/dashboard/summary`, {
     headers: {
       "Content-Type": "application/json",
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

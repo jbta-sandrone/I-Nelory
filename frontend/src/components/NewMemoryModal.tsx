@@ -14,6 +14,7 @@ import {
   getMemoryTagNames,
   type ApiTag,
 } from "../utils/memoryMetadata";
+import { API_BASE_URL } from "../config/api";
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -451,7 +452,7 @@ export default function NewMemoryModal({
           throw new Error("Missing authentication token. Please log in again.");
         }
 
-        const response = await fetch("http://localhost:5000/api/albums", {
+        const response = await fetch(`${API_BASE_URL}/api/albums`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -607,8 +608,8 @@ export default function NewMemoryModal({
 
     try {
       const endpoint = memory
-        ? `http://localhost:5000/api/memories/${encodeURIComponent(memory.id)}`
-        : "http://localhost:5000/api/memories";
+        ? `${API_BASE_URL}/api/memories/${encodeURIComponent(memory.id)}`
+        : `${API_BASE_URL}/api/memories`;
       const method = memory ? "PATCH" : "POST";
       const createFormData = new FormData();
 

@@ -13,6 +13,7 @@ import MemoryMedia from "../components/MemoryMedia";
 import MemoryViewerModal from "../components/MemoryViewerModal";
 import { getMemoryTagNames } from "../utils/memoryMetadata";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
+import { API_BASE_URL } from "../config/api";
 
 type ArchiveAction = "restore" | "delete" | null;
 
@@ -283,7 +284,7 @@ export default function ArchivePage() {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/memories/archive",
+          `${API_BASE_URL}/api/memories/archive`,
           {
             method: "GET",
             headers: {
@@ -369,7 +370,7 @@ export default function ArchivePage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(
           memory.id,
         )}/archive`,
         {
@@ -441,7 +442,7 @@ export default function ArchivePage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(memory.id)}`,
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(memory.id)}`,
         {
           method: "DELETE",
           headers: {

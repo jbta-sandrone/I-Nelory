@@ -17,6 +17,7 @@ import {
   formatMoodLabel,
   getMemoryTagNames,
 } from "../utils/memoryMetadata";
+import { API_BASE_URL } from "../config/api";
 
 type FavoriteMemory = {
   id: string;
@@ -351,7 +352,7 @@ export default function FavoritesPage() {
           throw new Error("Missing authentication token. Please log in again.");
         }
 
-        const response = await fetch("http://localhost:5000/api/memories", {
+        const response = await fetch(`${API_BASE_URL}/api/memories`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -417,7 +418,7 @@ export default function FavoritesPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(
           favorite.id,
         )}/favorite`,
         {
@@ -494,7 +495,7 @@ export default function FavoritesPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(
           favorite.id,
         )}/archive`,
         {

@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5000/api";
+import { API_BASE_URL } from "../config/api";
 
 export type AlbumOption = {
   id: string;
@@ -27,7 +27,7 @@ function getApiMessage(data: unknown, fallback: string) {
 }
 
 export async function getAlbumOptions(token: string, signal?: AbortSignal) {
-  const response = await fetch(`${API_BASE_URL}/albums`, {
+  const response = await fetch(`${API_BASE_URL}/api/albums`, {
     headers: { Authorization: `Bearer ${token}` },
     signal,
   });
@@ -47,7 +47,7 @@ export async function setMemoryAlbum<TMemory>(
   albumId: string | null,
 ) {
   const response = await fetch(
-    `${API_BASE_URL}/memories/${encodeURIComponent(memoryId)}/album`,
+    `${API_BASE_URL}/api/memories/${encodeURIComponent(memoryId)}/album`,
     {
       method: "PATCH",
       headers: {

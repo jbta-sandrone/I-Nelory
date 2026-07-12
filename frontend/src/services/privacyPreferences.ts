@@ -1,5 +1,4 @@
-const PRIVACY_PREFERENCES_API_URL =
-  "http://localhost:5000/api/privacy-preferences";
+import { API_BASE_URL } from "../config/api";
 
 export const PRIVACY_PREFERENCE_KEYS = [
   "confirmBeforeDelete",
@@ -31,7 +30,7 @@ async function parseJsonResponse<T>(response: Response, fallback: string) {
 }
 
 export async function getPrivacyPreferences(token: string) {
-  const response = await fetch(PRIVACY_PREFERENCES_API_URL, {
+  const response = await fetch(`${API_BASE_URL}/api/privacy-preferences`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -47,7 +46,7 @@ export async function updatePrivacyPreferences(
   token: string,
   updates: Partial<PrivacyPreferences>,
 ) {
-  const response = await fetch(PRIVACY_PREFERENCES_API_URL, {
+  const response = await fetch(`${API_BASE_URL}/api/privacy-preferences`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,

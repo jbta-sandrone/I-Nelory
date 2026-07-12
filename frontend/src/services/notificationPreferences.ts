@@ -1,5 +1,4 @@
-const NOTIFICATION_PREFERENCES_API_URL =
-  "http://localhost:5000/api/notification-preferences";
+import { API_BASE_URL } from "../config/api";
 
 export const NOTIFICATION_PREFERENCE_KEYS = [
   "notifyMemoryActivity",
@@ -41,7 +40,7 @@ async function parseJsonResponse<T>(response: Response, fallback: string) {
 }
 
 export async function getNotificationPreferences(token: string) {
-  const response = await fetch(NOTIFICATION_PREFERENCES_API_URL, {
+  const response = await fetch(`${API_BASE_URL}/api/notification-preferences`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -57,7 +56,7 @@ export async function updateNotificationPreferences(
   token: string,
   updates: Partial<NotificationPreferences>,
 ) {
-  const response = await fetch(NOTIFICATION_PREFERENCES_API_URL, {
+  const response = await fetch(`${API_BASE_URL}/api/notification-preferences`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,

@@ -11,6 +11,7 @@ import {
   waitForActionTransition,
 } from "../utils/actionTransition";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
+import { API_BASE_URL } from "../config/api";
 
 type Album = {
   id: string;
@@ -393,7 +394,7 @@ export default function AlbumsPage() {
           throw new Error("Missing authentication token. Please log in again.");
         }
 
-        const response = await fetch("http://localhost:5000/api/albums", {
+        const response = await fetch(`${API_BASE_URL}/api/albums`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -492,7 +493,7 @@ export default function AlbumsPage() {
     coverFormData.append("cover", coverImage);
 
     const response = await fetch(
-      `http://localhost:5000/api/albums/${encodeURIComponent(albumId)}/cover`,
+      `${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}/cover`,
       {
         method: "PATCH",
         headers: {
@@ -571,10 +572,10 @@ export default function AlbumsPage() {
     try {
       const response = await fetch(
         albumToEdit
-          ? `http://localhost:5000/api/albums/${encodeURIComponent(
+          ? `${API_BASE_URL}/api/albums/${encodeURIComponent(
               albumToEdit.id,
             )}`
-          : "http://localhost:5000/api/albums",
+          : `${API_BASE_URL}/api/albums`,
         {
         method: albumToEdit ? "PATCH" : "POST",
         headers: {
@@ -676,7 +677,7 @@ export default function AlbumsPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/albums/${encodeURIComponent(
+        `${API_BASE_URL}/api/albums/${encodeURIComponent(
           album.id,
         )}`,
         {

@@ -1,4 +1,4 @@
-const NOTIFICATIONS_API_BASE_URL = "http://localhost:5000/api/notifications";
+import { API_BASE_URL } from "../config/api";
 
 export type NotificationItem = {
   id: string;
@@ -33,7 +33,7 @@ async function parseJsonResponse<T>(response: Response, fallback: string) {
 
 export async function getNotifications(token: string, filter = "All") {
   const query = new URLSearchParams({ filter });
-  const response = await fetch(`${NOTIFICATIONS_API_BASE_URL}?${query.toString()}`, {
+  const response = await fetch(`${API_BASE_URL}/api/notifications?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -43,7 +43,7 @@ export async function getNotifications(token: string, filter = "All") {
 }
 
 export async function markNotificationRead(token: string, notificationId: string) {
-  const response = await fetch(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/read`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -54,7 +54,7 @@ export async function markNotificationRead(token: string, notificationId: string
 }
 
 export async function markAllNotificationsRead(token: string) {
-  const response = await fetch(`${NOTIFICATIONS_API_BASE_URL}/read-all`, {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -65,7 +65,7 @@ export async function markAllNotificationsRead(token: string) {
 }
 
 export async function deleteNotification(token: string, notificationId: string) {
-  const response = await fetch(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}`, {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -76,7 +76,7 @@ export async function deleteNotification(token: string, notificationId: string) 
 }
 
 export async function clearAllNotifications(token: string) {
-  const response = await fetch(`${NOTIFICATIONS_API_BASE_URL}`, {
+  const response = await fetch(`${API_BASE_URL}/api/notifications`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,

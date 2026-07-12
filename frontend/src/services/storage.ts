@@ -1,4 +1,4 @@
-const STORAGE_API_BASE_URL = "http://localhost:5000/api/storage";
+import { API_BASE_URL } from "../config/api";
 
 export type StorageSummary = {
   usedBytes: number;
@@ -18,7 +18,7 @@ export type StorageSummary = {
 };
 
 export async function getStorageSummary(token: string) {
-  const response = await fetch(`${STORAGE_API_BASE_URL}/summary`, {
+  const response = await fetch(`${API_BASE_URL}/api/storage/summary`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

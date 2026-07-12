@@ -1,4 +1,4 @@
-const ACCOUNT_API_BASE_URL = "http://localhost:5000/api/account";
+import { API_BASE_URL } from "../config/api";
 
 export type DeleteAccountPayload = {
   currentPassword: string;
@@ -41,7 +41,7 @@ function getDownloadFilename(response: Response) {
 }
 
 export async function exportAccountData(token: string) {
-  const response = await fetch(`${ACCOUNT_API_BASE_URL}/export`, {
+  const response = await fetch(`${API_BASE_URL}/api/account/export`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -62,7 +62,7 @@ export async function deleteAccount(
   token: string,
   payload: DeleteAccountPayload,
 ) {
-  const response = await fetch(ACCOUNT_API_BASE_URL, {
+  const response = await fetch(`${API_BASE_URL}/api/account`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,

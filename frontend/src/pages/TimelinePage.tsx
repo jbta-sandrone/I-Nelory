@@ -2,6 +2,7 @@ import { motion, type Variants } from "framer-motion";
 import { useEffect, useState } from "react";
 import MemoryMedia from "../components/MemoryMedia";
 import { getMemoryTagNames, type ApiTag } from "../utils/memoryMetadata";
+import { API_BASE_URL } from "../config/api";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -334,7 +335,7 @@ export default function TimelinePage() {
           throw new Error("Missing authentication token. Please log in again.");
         }
 
-        const response = await fetch("http://localhost:5000/api/memories", {
+        const response = await fetch(`${API_BASE_URL}/api/memories`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,

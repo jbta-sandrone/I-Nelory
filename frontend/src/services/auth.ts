@@ -1,4 +1,5 @@
-const AUTH_API_BASE_URL = "http://localhost:5000/api/auth";
+import { API_BASE_URL } from "../config/api";
+
 const AUTH_TOKEN_STORAGE_KEY = "i-nelory.auth.token";
 const AUTH_USER_STORAGE_KEY = "i-nelory.auth.user";
 
@@ -126,7 +127,7 @@ export function clearAuthSession() {
 }
 
 export async function registerUser(payload: RegisterPayload) {
-  const response = await fetch(`${AUTH_API_BASE_URL}/register`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -138,7 +139,7 @@ export async function registerUser(payload: RegisterPayload) {
 }
 
 export async function loginUser(payload: LoginPayload) {
-  const response = await fetch(`${AUTH_API_BASE_URL}/login`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -151,7 +152,7 @@ export async function loginUser(payload: LoginPayload) {
 
 export async function verifyEmail(token: string) {
   const response = await fetch(
-    `${AUTH_API_BASE_URL}/verify-email?token=${encodeURIComponent(token)}`
+    `${API_BASE_URL}/api/auth/verify-email?token=${encodeURIComponent(token)}`
   );
 
   return parseJsonResponse<{ message: string; type?: string }>(
@@ -161,7 +162,7 @@ export async function verifyEmail(token: string) {
 }
 
 export async function requestChangeEmail(token: string, payload: { newEmail: string; currentPassword: string }) {
-  const response = await fetch(`${AUTH_API_BASE_URL}/change-email/request`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/change-email/request`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -177,7 +178,7 @@ export async function requestChangeEmail(token: string, payload: { newEmail: str
 }
 
 export async function changeUsername(token: string, newUsername: string) {
-  const response = await fetch(`${AUTH_API_BASE_URL}/change-username`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/change-username`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -193,7 +194,7 @@ export async function changeUsername(token: string, newUsername: string) {
 }
 
 export async function changePassword(token: string, payload: { currentPassword: string; newPassword: string; confirmPassword: string }) {
-  const response = await fetch(`${AUTH_API_BASE_URL}/change-password`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -209,7 +210,7 @@ export async function changePassword(token: string, payload: { currentPassword: 
 }
 
 export async function getCurrentUser(token: string) {
-  const response = await fetch(`${AUTH_API_BASE_URL}/me`, {
+  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

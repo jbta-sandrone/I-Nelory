@@ -19,6 +19,7 @@ import {
 import { getMemoryTagNames } from "../utils/memoryMetadata";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
 import { setMemoryAlbum } from "../services/memoryAlbums";
+import { API_BASE_URL } from "../config/api";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -245,7 +246,7 @@ export default function AlbumDetailPage() {
         }
 
         const response = await fetch(
-          `http://localhost:5000/api/albums/${encodeURIComponent(id)}`,
+          `${API_BASE_URL}/api/albums/${encodeURIComponent(id)}`,
           {
             method: "GET",
             headers: {
@@ -436,7 +437,7 @@ export default function AlbumDetailPage() {
     coverFormData.append("cover", coverImage);
 
     const response = await fetch(
-      `http://localhost:5000/api/albums/${encodeURIComponent(albumId)}/cover`,
+      `${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}/cover`,
       {
         method: "PATCH",
         headers: {
@@ -494,7 +495,7 @@ export default function AlbumDetailPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/albums/${encodeURIComponent(album.id)}`,
+        `${API_BASE_URL}/api/albums/${encodeURIComponent(album.id)}`,
         {
           method: "PATCH",
           headers: {
@@ -578,7 +579,7 @@ export default function AlbumDetailPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(
           memory.id,
         )}/favorite`,
         {
@@ -770,7 +771,7 @@ export default function AlbumDetailPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(
           memory.id,
         )}`,
         {
@@ -845,7 +846,7 @@ export default function AlbumDetailPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/memories/${encodeURIComponent(
+        `${API_BASE_URL}/api/memories/${encodeURIComponent(
           memory.id,
         )}/archive`,
         {

@@ -7,6 +7,7 @@ import { getStoredAuthToken } from "../services/auth";
 import FeedbackDialog from "../components/FeedbackDialog";
 import ActionTransitionOverlay from "../components/ActionTransitionOverlay";
 import { waitForActionTransition } from "../utils/actionTransition";
+import { API_BASE_URL } from "../config/api";
 
 type ApiMemory = {
   id: string;
@@ -225,7 +226,7 @@ export default function ProfilePage() {
 
         // Fetch all memories
         const memoriesResponse = await fetch(
-          "http://localhost:5000/api/memories",
+          `${API_BASE_URL}/api/memories`,
           {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
@@ -245,7 +246,7 @@ export default function ProfilePage() {
 
         // Fetch archived memories
         const archivedResponse = await fetch(
-          "http://localhost:5000/api/memories/archive",
+          `${API_BASE_URL}/api/memories/archive`,
           {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
@@ -259,7 +260,7 @@ export default function ProfilePage() {
         const archived = archivedData.memories || [];
 
         // Fetch albums
-        const albumsResponse = await fetch("http://localhost:5000/api/albums", {
+        const albumsResponse = await fetch(`${API_BASE_URL}/api/albums`, {
           method: "GET",
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
@@ -330,7 +331,7 @@ export default function ProfilePage() {
       }
 
       // Step A: update bio/location
-      const profileRes = await fetch("http://localhost:5000/api/auth/profile", {
+      const profileRes = await fetch(`${API_BASE_URL}/api/auth/profile`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -357,7 +358,7 @@ export default function ProfilePage() {
         formData.append("avatar", selectedAvatarFile);
 
         const avatarRes = await fetch(
-          "http://localhost:5000/api/auth/profile/avatar",
+          `${API_BASE_URL}/api/auth/profile/avatar`,
           {
             method: "PATCH",
             headers: {
