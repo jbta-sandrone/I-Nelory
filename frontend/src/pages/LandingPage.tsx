@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
   import Lenis from "lenis";
 import {
   AnimatePresence,
@@ -482,6 +482,8 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
     const [showLogin, setShowLogin] = useState(false);
     const [showSignup, setShowSignup] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const lenisRef = useRef<Lenis | null>(null);
     const navigate = useNavigate();
     const prefersReducedMotion = useReducedMotion();
     const { scrollYProgress } = useScroll();
@@ -498,6 +500,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
         lerp: 0.08,
         wheelMultiplier: 0.9,
       });
+      lenisRef.current = lenis;
 
       let frameId = 0;
 
@@ -511,12 +514,78 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
       return () => {
         cancelAnimationFrame(frameId);
         lenis.destroy();
+        if (lenisRef.current === lenis) {
+          lenisRef.current = null;
+        }
       };
     }, [prefersReducedMotion]);
+
+    useEffect(() => {
+      if (!isMobileMenuOpen) {
+        return;
+      }
+
+      const closeOnEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          setIsMobileMenuOpen(false);
+        }
+      };
+      const closeAtDesktopWidth = () => {
+        if (window.innerWidth >= 768) {
+          setIsMobileMenuOpen(false);
+        }
+      };
+
+      window.addEventListener("keydown", closeOnEscape);
+      window.addEventListener("resize", closeAtDesktopWidth);
+
+      return () => {
+        window.removeEventListener("keydown", closeOnEscape);
+        window.removeEventListener("resize", closeAtDesktopWidth);
+      };
+    }, [isMobileMenuOpen]);
 
     const openLoginModal = () => {
         setShowSignup(false);
         setShowLogin(true);
+    };
+
+    const handleSectionNavigation = (
+      event: MouseEvent<HTMLAnchorElement>,
+      targetId: string,
+    ) => {
+      event.preventDefault();
+      const waitForMobileMenu = isMobileMenuOpen;
+      setIsMobileMenuOpen(false);
+
+      const scrollToSection = () => {
+        const target = document.querySelector<HTMLElement>(targetId);
+
+        if (!target) {
+          return;
+        }
+
+        const offset = -88;
+
+        if (prefersReducedMotion || !lenisRef.current) {
+          const targetTop =
+            target.getBoundingClientRect().top + window.scrollY + offset;
+          window.scrollTo({ top: targetTop, behavior: "auto" });
+        } else {
+          lenisRef.current.scrollTo(target, {
+            offset,
+            duration: 1.1,
+          });
+        }
+
+        window.history.replaceState(null, "", targetId);
+      };
+
+      if (waitForMobileMenu) {
+        window.setTimeout(scrollToSection, 220);
+      } else {
+        window.requestAnimationFrame(scrollToSection);
+      }
     };
 
     const openSignupModal = () => {
@@ -562,11 +631,11 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
         <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/70 backdrop-blur-xl">
           <nav
             aria-label="Primary navigation"
-            className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-8"
+            className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8"
           >
             <a
               href="#"
-              className="flex items-center gap-3 text-xl font-semibold tracking-tight"
+              className="flex shrink-0 items-center gap-3 text-xl font-semibold tracking-tight"
             >
               <img
                 src={iNeloryLogo}
@@ -578,21 +647,45 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
             </a>
 
             <div className="hidden items-center gap-8 text-sm font-medium text-slate-500 md:flex">
-              <a className="transition hover:text-slate-950" href="#journey">
+              <a
+                className="transition hover:text-slate-950"
+                href="#journey"
+                onClick={(event) =>
+                  handleSectionNavigation(event, "#journey")
+                }
+              >
                 About
               </a>
-              <a className="transition hover:text-slate-950" href="#features">
+              <a
+                className="transition hover:text-slate-950"
+                href="#features"
+                onClick={(event) =>
+                  handleSectionNavigation(event, "#features")
+                }
+              >
                 Features
               </a>
-              <a className="transition hover:text-slate-950" href="#ai-search">
+              <a
+                className="transition hover:text-slate-950"
+                href="#ai-search"
+                onClick={(event) =>
+                  handleSectionNavigation(event, "#ai-search")
+                }
+              >
                 AI Search
               </a>
-              <a className="transition hover:text-slate-950" href="#timeline">
+              <a
+                className="transition hover:text-slate-950"
+                href="#timeline"
+                onClick={(event) =>
+                  handleSectionNavigation(event, "#timeline")
+                }
+              >
                 Timeline
               </a>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3 md:flex">
               <button
                 type="button"
                 onClick={openLoginModal}
@@ -608,7 +701,99 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                 Sign Up
               </button>
             </div>
+
+            <button
+              type="button"
+              aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-navigation-menu"
+              onClick={() => setIsMobileMenuOpen((isOpen) => !isOpen)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 shadow-sm backdrop-blur transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 md:hidden"
+            >
+              {isMobileMenuOpen ? (
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+              ) : (
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M5 7h14M5 12h14M5 17h14" />
+                </svg>
+              )}
+            </button>
           </nav>
+
+          <AnimatePresence initial={false}>
+            {isMobileMenuOpen ? (
+              <motion.nav
+                id="mobile-navigation-menu"
+                aria-label="Mobile navigation"
+                className="overflow-hidden border-t border-slate-200/70 bg-white/90 px-4 pb-5 pt-3 shadow-xl shadow-slate-950/10 backdrop-blur-xl sm:px-6 md:hidden"
+                initial={{ opacity: 0, height: 0, y: -8 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -8 }}
+                transition={{ duration: 0.22, ease: easeOut }}
+              >
+                <div className="mx-auto flex max-w-7xl flex-col gap-1">
+                  {[
+                    ["About", "#journey"],
+                    ["Features", "#features"],
+                    ["AI Search", "#ai-search"],
+                    ["Timeline", "#timeline"],
+                  ].map(([label, href]) => (
+                    <a
+                      key={href}
+                      href={href}
+                      onClick={(event) =>
+                        handleSectionNavigation(event, href)
+                      }
+                      className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20"
+                    >
+                      {label}
+                    </a>
+                  ))}
+
+                  <div className="my-2 border-t border-slate-200" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      openLoginModal();
+                    }}
+                    className="w-full rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20"
+                  >
+                    Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      openSignupModal();
+                    }}
+                    className="mt-1 w-full rounded-xl bg-emerald-600 px-4 py-3 text-left text-sm font-semibold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/25"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              </motion.nav>
+            ) : null}
+          </AnimatePresence>
         </header>
 
         {/* Hero */}
@@ -659,6 +844,9 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
               </button>
               <a
                 href="#features"
+                onClick={(event) =>
+                  handleSectionNavigation(event, "#features")
+                }
                 className="rounded-full border border-slate-200 bg-white px-7 py-3.5 text-center text-sm font-semibold text-slate-800 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-slate-300 hover:opacity-50 hover:shadow-lg hover:bg-white/80"
               >
                 Explore Features
