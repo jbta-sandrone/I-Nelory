@@ -8,6 +8,11 @@ import {
   markNotificationAsRead,
 } from "../services/notification.service.js";
 
+function getSingleParam(value: string | string[] | undefined) {
+  return typeof value === "string" ? value : null;
+}
+
+
 export const listNotifications = async (req: AuthRequest, res: Response) => {
   try {
     const filter = typeof req.query.filter === "string" ? req.query.filter : "All";
@@ -23,17 +28,29 @@ export const listNotifications = async (req: AuthRequest, res: Response) => {
 
 export const readNotification = async (req: AuthRequest, res: Response) => {
   try {
-    const notificationId = req.params.id;
+    const notificationId = getSingleParam(req.params.id);
+
+    if (!notificationId) {
+      return res.status(400).json({
+        message: "Invalid notification ID",
+      });
+    }
+
     const result = await markNotificationAsRead(notificationId, req.userId!);
 
     if (!result) {
       return res.status(404).json({ message: "Notification not found" });
     }
 
-    return res.status(200).json({ message: "Notification marked as read" });
+    return res.status(200).json({
+      message: "Notification marked as read",
+    });
   } catch (error) {
     return res.status(400).json({
-      message: error instanceof Error ? error.message : "Failed to mark notification as read",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to mark notification as read",
     });
   }
 };
@@ -50,19 +67,34 @@ export const readAllNotifications = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const removeNotification = async (req: AuthRequest, res: Response) => {
+export const removeNotification = async (
+  req: AuthRequest,
+  res: Response,
+) => {
   try {
-    const notificationId = req.params.id;
+    const notificationId = getSingleParam(req.params.id);
+
+    if (!notificationId) {
+      return res.status(400).json({
+        message: "Invalid notification ID",
+      });
+    }
+
     const result = await deleteNotification(notificationId, req.userId!);
 
     if (!result) {
       return res.status(404).json({ message: "Notification not found" });
     }
 
-    return res.status(200).json({ message: "Notification deleted" });
+    return res.status(200).json({
+      message: "Notification deleted",
+    });
   } catch (error) {
     return res.status(400).json({
-      message: error instanceof Error ? error.message : "Failed to delete notification",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to delete notification",
     });
   }
 };
