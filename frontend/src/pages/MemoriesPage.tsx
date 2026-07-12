@@ -9,8 +9,8 @@ import {
 import FeedbackDialog, {
   type FeedbackState,
 } from "../components/FeedbackDialog";
-import MemoryMedia from "../components/MemoryMedia";
 import MemoryCard from "../components/MemoryCard";
+import MemoryViewerModal from "../components/MemoryViewerModal";
 import AlbumSelectionModal from "../components/AlbumSelectionModal";
 import NewMemoryModal, {
   type ApiMemory,
@@ -18,7 +18,6 @@ import NewMemoryModal, {
 } from "../components/NewMemoryModal";
 import {
   MOOD_OPTIONS,
-  formatMoodLabel,
   getMemoryTagNames,
 } from "../utils/memoryMetadata";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
@@ -42,10 +41,14 @@ type Memory = {
   mediaType: string | null;
   mediaUrl: string | null;
   mediaSizeBytes: number | null;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
+  mediaDurationSeconds: number | null;
   tags: string[];
   image: string | null;
   favorite: boolean;
   albumId: string | null;
+  album: ApiMemory["album"];
   createdAt: string;
   updatedAt: string;
 };
@@ -174,10 +177,6 @@ function getMemoryType(mediaType?: string | null): MemoryType {
   return "Photo";
 }
 
-function isVideoMemory(memory: Pick<Memory, "mediaType">) {
-  return memory.mediaType?.toUpperCase() === "VIDEO";
-}
-
 function formatMemoryDate(memoryDate?: string | null) {
   if (!memoryDate) {
     return "No date";
@@ -215,10 +214,14 @@ function mapApiMemory(memory: ApiMemory): Memory {
     mediaType: memory.mediaType ?? null,
     mediaUrl: memory.mediaUrl?.trim() || null,
     mediaSizeBytes: memory.mediaSizeBytes ?? null,
+    mediaWidth: memory.mediaWidth ?? null,
+    mediaHeight: memory.mediaHeight ?? null,
+    mediaDurationSeconds: memory.mediaDurationSeconds ?? null,
     tags,
     image: memory.mediaUrl?.trim() || null,
     favorite: memory.isFavorite,
     albumId: memory.albumId ?? null,
+    album: memory.album ?? null,
     createdAt: memory.createdAt,
     updatedAt: memory.updatedAt,
   };
@@ -1747,93 +1750,7 @@ export default function MemoriesPage() {
 
       <ActionTransitionOverlay isOpen={isActionTransitioning} />
 
-      <AnimatePresence>
-        {memoryToView ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 px-4 py-6 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={closeMemoryViewer}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="view-memory-title"
-              initial={{ opacity: 0, y: 18, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 18, scale: 0.96 }}
-              transition={{ duration: 0.26, ease: easeOut }}
-              className="my-auto w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/15 bg-white shadow-2xl shadow-slate-950/30"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">
-                    {memoryToView.type}
-                  </p>
-                  <h2
-                    id="view-memory-title"
-                    className="mt-2 truncate text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl"
-                  >
-                    {memoryToView.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {memoryToView.date}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  aria-label="Close memory viewer"
-                  onClick={closeMemoryViewer}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700"
-                >
-                  &times;
-                </button>
-              </div>
-
-              <div className="bg-slate-950 p-3 sm:p-5">
-                {isVideoMemory(memoryToView) && memoryToView.mediaUrl ? (
-                  <video
-                    src={memoryToView.mediaUrl}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="h-auto max-h-[75vh] w-full object-contain"
-                  />
-                ) : (
-                  <MemoryMedia
-                    src={memoryToView.mediaUrl}
-                    type={memoryToView.mediaType}
-                    className="h-auto max-h-[75vh] w-full object-contain"
-                    placeholderClassName="flex h-[min(75vh,28rem)] w-full items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-5xl font-semibold text-emerald-700"
-                  />
-                )}
-              </div>
-
-              <div className="space-y-3 p-5 sm:p-6">
-                <p className="text-sm leading-6 text-slate-600">
-                  {memoryToView.caption}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    {formatMoodLabel(memoryToView.mood)}
-                  </span>
-                  {memoryToView.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <MemoryViewerModal memory={memoryToView} onClose={closeMemoryViewer} />
 
       <AnimatePresence>
         {memoryToDelete ? (

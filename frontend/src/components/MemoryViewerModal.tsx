@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import MemoryMedia from "./MemoryMedia";
 import { formatMoodLabel } from "../utils/memoryMetadata";
+import { formatBytes } from "../utils/formatBytes";
 
-type ViewableMemory = {
+export type ViewableMemory = {
   title: string;
   date: string;
   caption: string;
@@ -10,6 +11,16 @@ type ViewableMemory = {
   type: string;
   mediaType?: string | null;
   mediaUrl?: string | null;
+  mediaSizeBytes?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  mediaDurationSeconds?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  album?: {
+    id: string;
+    name: string;
+  } | null;
   tags: string[];
 };
 
@@ -24,10 +35,81 @@ function isVideoMemory(memory: ViewableMemory) {
   return memory.mediaType?.toUpperCase() === "VIDEO";
 }
 
+function formatTechnicalDate(value?: string | null) {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Unavailable";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDuration(seconds?: number | null) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) {
+    return "Unavailable";
+  }
+
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(remainingSeconds).padStart(2, "0")}s`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${String(remainingSeconds).padStart(2, "0")}s`;
+  }
+
+  return `${remainingSeconds}s`;
+}
+
 export default function MemoryViewerModal({
   memory,
   onClose,
 }: MemoryViewerModalProps) {
+  const isVideo = memory ? isVideoMemory(memory) : false;
+  const resolution =
+    memory?.mediaWidth && memory.mediaHeight
+      ? `${memory.mediaWidth} \u00d7 ${memory.mediaHeight}`
+      : "Unavailable";
+  const details: Array<[string, string]> = memory
+    ? [
+        ["Album", memory.album?.name?.trim() || "Not in an album"],
+        ["Media Type", isVideo ? "Video" : "Photo"],
+        [
+          "File Size",
+          memory.mediaSizeBytes === null ||
+          memory.mediaSizeBytes === undefined
+            ? "Unavailable"
+            : formatBytes(memory.mediaSizeBytes),
+        ],
+        ["Resolution", resolution],
+        ...(isVideo
+          ? [
+              [
+                "Duration",
+                formatDuration(memory.mediaDurationSeconds),
+              ] as [string, string],
+            ]
+          : []),
+        ["Uploaded", formatTechnicalDate(memory.createdAt)],
+        ["Last Updated", formatTechnicalDate(memory.updatedAt)],
+      ]
+    : [];
+
   return (
     <AnimatePresence>
       {memory ? (
@@ -109,6 +191,30 @@ export default function MemoryViewerModal({
                   </span>
                 ))}
               </div>
+
+              <section className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                <div className="flex items-center gap-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <h3 className="text-base font-semibold text-slate-950">
+                    Memory Details
+                  </h3>
+                </div>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {details.map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                    >
+                      <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {label}
+                      </dt>
+                      <dd className="mt-1.5 break-words text-sm font-semibold text-slate-800">
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
             </div>
           </motion.div>
         </motion.div>

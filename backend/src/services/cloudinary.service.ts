@@ -122,7 +122,12 @@ export const getMemoryMediaResource = async (
 
   return cloudinary.api.resource(publicId, {
     resource_type: resourceType,
-  }) as Promise<{ bytes?: number }>;
+  }) as Promise<{
+    bytes?: number;
+    width?: number;
+    height?: number;
+    duration?: number;
+  }>;
 };
 
 export const uploadAlbumCover = async (file: Express.Multer.File) => {

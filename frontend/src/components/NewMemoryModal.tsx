@@ -24,6 +24,9 @@ export type ApiMemory = {
   mediaUrl?: string | null;
   mediaPublicId?: string | null;
   mediaSizeBytes?: number | null;
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
+  mediaDurationSeconds?: number | null;
   mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
   memoryDate?: string | null;
   mood?: string | null;
@@ -31,6 +34,10 @@ export type ApiMemory = {
   isFavorite: boolean;
   isArchived: boolean;
   albumId?: string | null;
+  album?: {
+    id: string;
+    name: string;
+  } | null;
   tags?: ApiTag[];
   userId: string;
   createdAt: string;

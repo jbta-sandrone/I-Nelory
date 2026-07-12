@@ -23,10 +23,17 @@ type ArchivedMemory = {
   archivedDate: string;
   caption: string;
   type: "Photo" | "Video" | "Story";
-  album: string;
+  albumLabel: string;
+  album: ApiMemory["album"];
   image: string | null;
   mediaUrl: string | null;
   mediaType: string | null;
+  mediaSizeBytes: number | null;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
+  mediaDurationSeconds: number | null;
+  createdAt: string;
+  updatedAt: string;
   mood: string;
   tags: string[];
 };
@@ -143,10 +150,17 @@ function mapApiMemory(memory: ApiMemory): ArchivedMemory {
     archivedDate: formatArchivedDate(memory.updatedAt),
     caption: memory.description?.trim() || "No description yet.",
     type,
-    album: memory.albumId ? "Album" : "Memory",
+    albumLabel: memory.album?.name ?? "Memory",
+    album: memory.album ?? null,
     image: mediaUrl,
     mediaUrl,
     mediaType: memory.mediaType ?? null,
+    mediaSizeBytes: memory.mediaSizeBytes ?? null,
+    mediaWidth: memory.mediaWidth ?? null,
+    mediaHeight: memory.mediaHeight ?? null,
+    mediaDurationSeconds: memory.mediaDurationSeconds ?? null,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
     mood: memory.location?.trim() || "Neutral",
     tags,
   };
@@ -792,7 +806,7 @@ export default function ArchivePage() {
 
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {memory.album}
+                    {memory.albumLabel}
                   </span>
                   <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                     {memory.archivedDate}

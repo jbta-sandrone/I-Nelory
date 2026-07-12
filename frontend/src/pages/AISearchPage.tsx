@@ -2,40 +2,22 @@ import { motion, type Variants } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import MemoryMedia from "../components/MemoryMedia";
-import { getMemoryTagNames, type ApiTag } from "../utils/memoryMetadata";
+import MemoryViewerModal from "../components/MemoryViewerModal";
+import type { ApiMemory } from "../components/NewMemoryModal";
+import { getMemoryTagNames } from "../utils/memoryMetadata";
 import { usePrivacyPreferences } from "../context/PrivacyPreferenceContext";
+import {
+  useAISearch,
+  type AISearchResult,
+} from "../context/AISearchContext";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
-type ApiMemory = {
-  id: string;
-  title?: string | null;
-  description?: string | null;
-  mediaType?: "image" | "video" | "IMAGE" | "VIDEO" | null;
-  mediaUrl?: string | null;
-  memoryDate?: string | null;
-  createdAt: string;
-  location?: string | null;
-  tags?: ApiTag[];
-  isFavorite: boolean;
-  isArchived: boolean;
-  albumId?: string | null;
-};
-
-type SearchResult = {
-  id: string;
-  title: string;
-  date: string;
-  caption: string;
-  type: MemoryType;
-  location: string;
-  tags: string[];
-  image: string | null;
-  matchedFields: string[];
-};
-
 type MemoriesResponse = {
   memories: ApiMemory[];
+  message?: string;
+  answer?: string;
+  summary?: string;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -126,11 +108,12 @@ function formatMemoryDate(memoryDate?: string | null, createdAt?: string) {
   }).format(date);
 }
 
-function mapApiMemory(memory: ApiMemory): SearchResult {
+function mapApiMemory(memory: ApiMemory): AISearchResult {
   const type = getMemoryType(memory.mediaType);
   const title = memory.title?.trim() || "Untitled memory";
   const description = memory.description?.trim() || "";
   const location = memory.location?.trim() || "Unknown location";
+  const mood = memory.mood?.trim() || memory.location?.trim() || "Neutral";
   const tags = getMemoryTagNames(memory.tags);
   const date = formatMemoryDate(memory.memoryDate, memory.createdAt);
   const image = memory.mediaUrl?.trim() || null;
@@ -140,10 +123,20 @@ function mapApiMemory(memory: ApiMemory): SearchResult {
     title,
     date,
     caption: description || "No description yet.",
+    mood,
     type,
     location,
     tags,
     image,
+    mediaUrl: image,
+    mediaType: memory.mediaType ?? null,
+    mediaSizeBytes: memory.mediaSizeBytes ?? null,
+    mediaWidth: memory.mediaWidth ?? null,
+    mediaHeight: memory.mediaHeight ?? null,
+    mediaDurationSeconds: memory.mediaDurationSeconds ?? null,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
+    album: memory.album ?? null,
     matchedFields: [],
   };
 }
@@ -151,9 +144,9 @@ function mapApiMemory(memory: ApiMemory): SearchResult {
 async function aiSearchMemories(
   query: string,
   token: string
-): Promise<SearchResult[]> {
+): Promise<{ results: AISearchResult[]; responseText: string }> {
   if (!query.trim()) {
-    return [];
+    return { results: [], responseText: "" };
   }
 
   try {
@@ -173,9 +166,12 @@ async function aiSearchMemories(
     const data = (await response.json()) as MemoriesResponse;
 
     // Map API memories to SearchResult format
-    return data.memories
-      .filter((memory) => !memory.isArchived)
-      .map(mapApiMemory);
+    return {
+      results: data.memories
+        .filter((memory) => !memory.isArchived)
+        .map(mapApiMemory),
+      responseText: data.answer ?? data.summary ?? data.message ?? "",
+    };
   } catch (error) {
     console.error("AI Search error:", error);
     throw error;
@@ -188,14 +184,26 @@ export default function AISearchPage() {
     isLoading: privacyPreferencesLoading,
     loadError: privacyPreferencesLoadError,
   } = usePrivacyPreferences();
-  const [searchText, setSearchText] = useState("");
-  const [allMemories, setAllMemories] = useState<SearchResult[]>([]);
-  const [filteredResults, setFilteredResults] = useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSearching, setIsSearching] = useState(false);
+  const {
+    searchText,
+    setSearchText,
+    setSubmittedQuery,
+    setResponseText,
+    results: filteredResults,
+    setResults: setFilteredResults,
+    isSearching,
+    beginSearch,
+    finishSearch,
+    searchError,
+    setSearchError,
+    hasSearched,
+    setHasSearched,
+    clearSearch,
+  } = useAISearch();
+  const [allMemories, setAllMemories] = useState<AISearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(() => !hasSearched);
   const [errorMessage, setErrorMessage] = useState("");
-  const [searchError, setSearchError] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
+  const [memoryToView, setMemoryToView] = useState<AISearchResult | null>(null);
 
   // Fetch memories on mount
   useEffect(() => {
@@ -210,7 +218,6 @@ export default function AISearchPage() {
     const controller = new AbortController();
 
     async function fetchMemories() {
-      setIsLoading(true);
       setErrorMessage("");
 
       try {
@@ -275,9 +282,13 @@ export default function AISearchPage() {
       return;
     }
 
+    if (!beginSearch()) {
+      return;
+    }
+
     setHasSearched(true);
-    setIsSearching(true);
     setSearchError("");
+    setSubmittedQuery(query.trim());
 
     try {
       const token = getStoredToken();
@@ -286,15 +297,17 @@ export default function AISearchPage() {
         throw new Error("Missing authentication token. Please log in again.");
       }
 
-      const results = await aiSearchMemories(query, token);
-      setFilteredResults(results);
+      const response = await aiSearchMemories(query, token);
+      setFilteredResults(response.results);
+      setResponseText(response.responseText);
     } catch (error) {
       setFilteredResults([]);
+      setResponseText("");
       setSearchError(
         error instanceof Error ? error.message : "Search failed. Please try again.",
       );
     } finally {
-      setIsSearching(false);
+      finishSearch();
     }
   };
 
@@ -457,6 +470,16 @@ export default function AISearchPage() {
                   {prompt}
                 </button>
               ))}
+              {hasSearched ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  disabled={isSearching}
+                  className="rounded-full border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Clear Search
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -621,9 +644,19 @@ export default function AISearchPage() {
                   variants={fadeUp}
                   whileHover={{ y: -6, scale: 1.01 }}
                   transition={{ duration: 0.35 }}
-                  className="group min-w-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 transition duration-300 hover:shadow-xl hover:shadow-slate-950/10"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${result.title}`}
+                  onClick={() => setMemoryToView(result)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setMemoryToView(result);
+                    }
+                  }}
+                  className="group min-w-0 cursor-pointer overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm shadow-slate-950/5 outline-none transition duration-300 hover:shadow-xl hover:shadow-slate-950/10 focus-visible:border-emerald-400 focus-visible:ring-4 focus-visible:ring-emerald-500/15"
                 >
-                  <div className="h-52 overflow-hidden">
+                  <div className="relative h-52 overflow-hidden">
                     <MemoryMedia
                       src={result.image}
                       type={result.type}
@@ -740,6 +773,11 @@ export default function AISearchPage() {
           ))}
         </motion.section>
       )}
+
+      <MemoryViewerModal
+        memory={memoryToView}
+        onClose={() => setMemoryToView(null)}
+      />
     </motion.div>
   );
 }

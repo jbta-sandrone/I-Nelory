@@ -1041,12 +1041,7 @@ export default function AlbumsPage() {
                       />
                     </FormField>
 
-                    <FormField label="Privacy">
-                      <select disabled={isCreating} className={inputClasses()}>
-                        <option>Private</option>
-                        <option>Shared Later</option>
-                      </select>
-                    </FormField>
+                    
                   </div>
                 </div>
 

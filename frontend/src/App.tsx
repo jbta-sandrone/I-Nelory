@@ -32,6 +32,7 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import AuthGuard from "./components/AuthGuard";
 import PublicLightLayout from "./components/PublicLightLayout";
 import { PrivacyPreferenceProvider } from "./context/PrivacyPreferenceContext";
+import { AISearchProvider } from "./context/AISearchContext";
 
 function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
@@ -117,9 +118,11 @@ function App() {
             path="/dashboard"
             element={
               <AuthGuard>
-                <PrivacyPreferenceProvider>
-                  <Dashboard />
-                </PrivacyPreferenceProvider>
+                <AISearchProvider>
+                  <PrivacyPreferenceProvider>
+                    <Dashboard />
+                  </PrivacyPreferenceProvider>
+                </AISearchProvider>
               </AuthGuard>
             }
           >

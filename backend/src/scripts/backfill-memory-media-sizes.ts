@@ -5,21 +5,33 @@ import {
   withUserStorageLock,
 } from "../services/storage.service.js";
 
-async function backfillMemoryMediaSizes() {
+async function backfillMemoryMediaMetadata() {
   const memories = await prisma.memory.findMany({
     where: {
       mediaPublicId: { not: null },
-      mediaSizeBytes: null,
+      OR: [
+        { mediaSizeBytes: null },
+        { mediaWidth: null },
+        { mediaHeight: null },
+        {
+          mediaType: "VIDEO",
+          mediaDurationSeconds: null,
+        },
+      ],
     },
     select: {
       id: true,
       userId: true,
       mediaPublicId: true,
       mediaType: true,
+      mediaSizeBytes: true,
+      mediaWidth: true,
+      mediaHeight: true,
+      mediaDurationSeconds: true,
     },
   });
 
-  console.log(`Found ${memories.length} memories requiring storage metadata.`);
+  console.log(`Found ${memories.length} memories requiring media metadata.`);
 
   for (const memory of memories) {
     if (!memory.mediaPublicId) {
@@ -37,36 +49,83 @@ async function backfillMemoryMediaSizes() {
             resourceType,
           );
 
-          if (!Number.isFinite(resource.bytes)) {
-            throw new Error("Cloudinary did not return a byte size.");
+          const updates: {
+            mediaSizeBytes?: bigint;
+            mediaWidth?: number;
+            mediaHeight?: number;
+            mediaDurationSeconds?: number;
+          } = {};
+
+          if (memory.mediaSizeBytes === null && Number.isFinite(resource.bytes)) {
+            updates.mediaSizeBytes = BigInt(resource.bytes!);
+          }
+
+          if (memory.mediaWidth === null && Number.isFinite(resource.width)) {
+            updates.mediaWidth = resource.width!;
+          }
+
+          if (memory.mediaHeight === null && Number.isFinite(resource.height)) {
+            updates.mediaHeight = resource.height!;
+          }
+
+          if (
+            memory.mediaType === "VIDEO" &&
+            memory.mediaDurationSeconds === null &&
+            Number.isFinite(resource.duration)
+          ) {
+            updates.mediaDurationSeconds = resource.duration!;
+          }
+
+          if (Object.keys(updates).length === 0) {
+            return {
+              updatedFields: [] as string[],
+              addedBytes: 0,
+              previousUsedBytes: snapshot.usedBytes,
+              nextUsedBytes: snapshot.usedBytes,
+            };
           }
 
           await (transaction as any).memory.update({
             where: { id: memory.id },
-            data: { mediaSizeBytes: BigInt(resource.bytes!) },
+            data: updates,
           });
+
+          const addedBytes =
+            memory.mediaSizeBytes === null && updates.mediaSizeBytes
+              ? Number(updates.mediaSizeBytes)
+              : 0;
+
           return {
-            bytes: resource.bytes!,
+            updatedFields: Object.keys(updates),
+            addedBytes,
             previousUsedBytes: snapshot.usedBytes,
-            nextUsedBytes: snapshot.usedBytes + resource.bytes!,
+            nextUsedBytes: snapshot.usedBytes + addedBytes,
           };
         },
       );
-      console.log(`Updated ${memory.id}: ${result.bytes} bytes.`);
 
-      try {
-        await notifyStorageThresholdCrossing(
-          memory.userId,
-          result.previousUsedBytes,
-          result.nextUsedBytes,
-        );
-      } catch (notificationError) {
-        console.warn(
-          `Storage alert failed for ${memory.id}:`,
-          notificationError instanceof Error
-            ? notificationError.message
-            : notificationError,
-        );
+      if (result.updatedFields.length === 0) {
+        console.log(`Skipped ${memory.id}: Cloudinary returned no missing metadata.`);
+        continue;
+      }
+
+      console.log(`Updated ${memory.id}: ${result.updatedFields.join(", ")}.`);
+
+      if (result.addedBytes > 0) {
+        try {
+          await notifyStorageThresholdCrossing(
+            memory.userId,
+            result.previousUsedBytes,
+            result.nextUsedBytes,
+          );
+        } catch (notificationError) {
+          console.warn(
+            `Storage alert failed for ${memory.id}:`,
+            notificationError instanceof Error
+              ? notificationError.message
+              : notificationError,
+          );
+        }
       }
     } catch (error) {
       console.warn(
@@ -77,9 +136,9 @@ async function backfillMemoryMediaSizes() {
   }
 }
 
-backfillMemoryMediaSizes()
+backfillMemoryMediaMetadata()
   .catch((error) => {
-    console.error("Storage metadata backfill failed:", error);
+    console.error("Media metadata backfill failed:", error);
     process.exitCode = 1;
   })
   .finally(async () => {

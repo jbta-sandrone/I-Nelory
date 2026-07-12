@@ -15,6 +15,7 @@ import {
   notifyStorageThresholdCrossing,
   withUserStorageLock,
 } from "./storage.service.js";
+import { serializeMemory } from "../utils/memory-serializer.js";
 
 type CloudinaryMemoryResourceType = "image" | "video";
 const MAX_MEMORY_TAGS = 20;
@@ -29,6 +30,12 @@ const memoryWithTagsInclude = {
     },
     orderBy: {
       name: "asc" as const,
+    },
+  },
+  album: {
+    select: {
+      id: true,
+      name: true,
     },
   },
 };
@@ -51,18 +58,6 @@ function getCloudinaryResourceType(
   value?: string | null,
 ): CloudinaryMemoryResourceType {
   return normalizeMediaType(value) === MediaType.VIDEO ? "video" : "image";
-}
-
-function serializeMemorySize<T extends { mediaSizeBytes?: bigint | null }>(
-  memory: T,
-) {
-  return {
-    ...memory,
-    mediaSizeBytes:
-      memory.mediaSizeBytes === null || memory.mediaSizeBytes === undefined
-        ? null
-        : Number(memory.mediaSizeBytes),
-  };
 }
 
 async function cleanupUploadedMemory(
@@ -221,7 +216,7 @@ export const getUserMemories = async (userId: string) => {
     },
   });
 
-  return memories.map(serializeMemorySize);
+  return memories.map(serializeMemory);
 };
 
 export const getUserArchivedMemories = async (userId: string) => {
@@ -236,7 +231,7 @@ export const getUserArchivedMemories = async (userId: string) => {
     },
   });
 
-  return memories.map(serializeMemorySize);
+  return memories.map(serializeMemory);
 };
 
 export const createUserMemory = async (
@@ -262,6 +257,10 @@ export const createUserMemory = async (
     mediaSizeBytes: uploadedMedia
       ? BigInt(uploadedMedia.bytes ?? mediaFile?.size ?? 0)
       : null,
+    mediaWidth: uploadedMedia?.width ?? null,
+    mediaHeight: uploadedMedia?.height ?? null,
+    mediaDurationSeconds:
+      mediaType === MediaType.VIDEO ? uploadedMedia?.duration ?? null : null,
     mediaType,
     memoryDate: data.memoryDate ? new Date(data.memoryDate) : undefined,
     location: data.location,
@@ -330,7 +329,7 @@ export const createUserMemory = async (
     }
   }
 
-  return serializeMemorySize(memory);
+  return serializeMemory(memory);
 };
 
 export const deleteUserMemory = async (userId: string, memoryId: string) => {
@@ -375,7 +374,7 @@ export const deleteUserMemory = async (userId: string, memoryId: string) => {
     console.warn("Failed to create delete-memory notification", error);
   }
 
-  return serializeMemorySize(memory);
+  return serializeMemory(memory);
 };
 
 export const updateUserMemory = async (
@@ -414,6 +413,12 @@ export const updateUserMemory = async (
           mediaUrl: uploadedMedia.secure_url,
           mediaPublicId: uploadedMedia.public_id,
           mediaSizeBytes: BigInt(uploadedMedia.bytes ?? mediaFile?.size ?? 0),
+          mediaWidth: uploadedMedia.width ?? null,
+          mediaHeight: uploadedMedia.height ?? null,
+          mediaDurationSeconds:
+            newMediaType === MediaType.VIDEO
+              ? uploadedMedia.duration ?? null
+              : null,
           mediaType: newMediaType,
         }
       : {}),
@@ -512,7 +517,7 @@ export const updateUserMemory = async (
     }
   }
 
-  return serializeMemorySize(updatedMemory);
+  return serializeMemory(updatedMemory);
 };
 
 export const assignUserMemoryAlbum = async (
@@ -588,7 +593,7 @@ export const assignUserMemoryAlbum = async (
     }
   }
 
-  return serializeMemorySize(updatedMemory);
+  return serializeMemory(updatedMemory);
 };
 
 export const toggleFavoriteMemory = async (
@@ -635,7 +640,7 @@ export const toggleFavoriteMemory = async (
     console.warn("Failed to create favorite notification", error);
   }
 
-  return serializeMemorySize(updatedMemory);
+  return serializeMemory(updatedMemory);
 };
 
 export const toggleArchiveMemory = async (userId: string, memoryId: string) => {
@@ -677,7 +682,7 @@ export const toggleArchiveMemory = async (userId: string, memoryId: string) => {
     console.warn("Failed to create archive notification", error);
   }
 
-  return serializeMemorySize(updatedMemory);
+  return serializeMemory(updatedMemory);
 };
 
 export const searchMemoriesByQuery = async (userId: string, query: string) => {
@@ -691,6 +696,7 @@ export const searchMemoriesByQuery = async (userId: string, query: string) => {
       ...memoryWithTagsInclude,
       album: {
         select: {
+          id: true,
           name: true,
         },
       },
@@ -754,5 +760,5 @@ Return format: ["id1", "id2", "id3"] or [] if none are relevant.`;
   // Filter memories to return only the relevant ones
   const relevantMemories = memories.filter((m) => relevantIds.includes(m.id));
 
-  return relevantMemories.map(serializeMemorySize);
+  return relevantMemories.map(serializeMemory);
 };

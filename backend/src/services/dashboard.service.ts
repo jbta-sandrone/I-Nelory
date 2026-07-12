@@ -1,4 +1,8 @@
 import { prisma } from "../config/prisma.js";
+import {
+  serializeMemory,
+  serializeNullableMemory,
+} from "../utils/memory-serializer.js";
 
 const nonArchivedMemoryWhere = (userId: string) => ({
   userId,
@@ -32,23 +36,13 @@ const memoryTagsInclude = {
       name: "asc" as const,
     },
   },
+  album: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
 };
-
-function serializeMemorySize<T extends { mediaSizeBytes?: bigint | null }>(
-  memory: T | null,
-) {
-  if (!memory) {
-    return null;
-  }
-
-  return {
-    ...memory,
-    mediaSizeBytes:
-      memory.mediaSizeBytes === null || memory.mediaSizeBytes === undefined
-        ? null
-        : Number(memory.mediaSizeBytes),
-  };
-}
 
 export async function getDashboardSummary(userId: string) {
   const today = new Date();
@@ -161,12 +155,12 @@ export async function getDashboardSummary(userId: string) {
       favorites,
       archived,
     },
-    memoryOfTheDay: serializeMemorySize(memoryOfTheDay),
-    recentMemories: recentMemories.map((memory) => serializeMemorySize(memory)),
+    memoryOfTheDay: serializeNullableMemory(memoryOfTheDay),
+    recentMemories: recentMemories.map(serializeMemory),
     recentAlbums: recentAlbums.map((album) => ({
       ...album,
       memoryCount: album._count.memories,
     })),
-    onThisDay: onThisDay.map((memory) => serializeMemorySize(memory)),
+    onThisDay: onThisDay.map(serializeMemory),
   };
 }

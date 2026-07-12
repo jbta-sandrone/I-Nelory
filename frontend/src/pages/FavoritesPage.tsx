@@ -24,11 +24,18 @@ type FavoriteMemory = {
   date: string;
   caption: string;
   mood: string;
-  album: string;
+  albumLabel: string;
+  album: ApiMemory["album"];
   tags: string[];
   image: string | null;
   mediaUrl: string | null;
   mediaType: string | null;
+  mediaSizeBytes: number | null;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
+  mediaDurationSeconds: number | null;
+  createdAt: string;
+  updatedAt: string;
   type: "Photo" | "Video" | "Story";
   favorite: boolean;
 };
@@ -113,7 +120,7 @@ function formatMemoryDate(memoryDate?: string | null) {
 function mapApiMemory(memory: ApiMemory): FavoriteMemory {
   const type = getMemoryType(memory.mediaType);
   const location = memory.location?.trim();
-  const album = memory.albumId ? "Album" : "Memory";
+  const albumLabel = memory.album?.name ?? "Memory";
   const tags = getMemoryTagNames(memory.tags);
 
   return {
@@ -122,11 +129,18 @@ function mapApiMemory(memory: ApiMemory): FavoriteMemory {
     date: formatMemoryDate(memory.memoryDate),
     caption: memory.description?.trim() || "No description yet.",
     mood: location || "Neutral",
-    album,
+    albumLabel,
+    album: memory.album ?? null,
     tags,
     image: memory.mediaUrl?.trim() || null,
     mediaUrl: memory.mediaUrl?.trim() || null,
     mediaType: memory.mediaType ?? null,
+    mediaSizeBytes: memory.mediaSizeBytes ?? null,
+    mediaWidth: memory.mediaWidth ?? null,
+    mediaHeight: memory.mediaHeight ?? null,
+    mediaDurationSeconds: memory.mediaDurationSeconds ?? null,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
     type,
     favorite: memory.isFavorite,
   };
@@ -140,7 +154,7 @@ function getMostLovedAlbum(favorites: FavoriteMemory[]) {
   const albumCounts = favorites.reduce<Record<string, number>>(
     (counts, favorite) => ({
       ...counts,
-      [favorite.album]: (counts[favorite.album] ?? 0) + 1,
+      [favorite.albumLabel]: (counts[favorite.albumLabel] ?? 0) + 1,
     }),
     {},
   );
@@ -288,7 +302,7 @@ function FavoriteCard({
             {formatMoodLabel(favorite.mood)}
           </span>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {favorite.album}
+            {favorite.albumLabel}
           </span>
           {visibleTags.map((tag) => (
             <span
@@ -670,7 +684,7 @@ export default function FavoritesPage() {
                   {formatMoodLabel(featuredFavorite.mood)}
                 </span>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                  {featuredFavorite.album}
+                  {featuredFavorite.albumLabel}
                 </span>
                 {featuredFavorite.tags.slice(0, 3).map((tag) => (
                   <span

@@ -7,6 +7,7 @@
     "dev": "tsx src/server.ts",
     "build": "tsc",
     "storage:backfill": "tsx src/scripts/backfill-memory-media-sizes.ts",
+    "media:metadata-backfill": "tsx src/scripts/backfill-memory-media-sizes.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {

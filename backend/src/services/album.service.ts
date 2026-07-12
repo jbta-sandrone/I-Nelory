@@ -4,6 +4,7 @@ import {
   uploadAlbumCover,
 } from "./cloudinary.service.js";
 import { notifyUser } from "./notification.service.js";
+import { serializeMemory } from "../utils/memory-serializer.js";
 
 const albumListInclude = {
   memories: {
@@ -160,13 +161,15 @@ export const getUserAlbumById = async (userId: string, albumId: string) => {
 
   return {
     ...album,
-    memories: album.memories.map((memory) => ({
-      ...memory,
-      mediaSizeBytes:
-        memory.mediaSizeBytes === null
-          ? null
-          : Number(memory.mediaSizeBytes),
-    })),
+    memories: album.memories.map((memory) =>
+      serializeMemory({
+        ...memory,
+        album: {
+          id: album.id,
+          name: album.name,
+        },
+      }),
+    ),
   };
 };
 

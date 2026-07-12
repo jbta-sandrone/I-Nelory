@@ -106,6 +106,9 @@ model Memory {
   mediaUrl    String?
   mediaPublicId String?
   mediaSizeBytes BigInt?
+  mediaWidth Int?
+  mediaHeight Int?
+  mediaDurationSeconds Float?
   mediaType MediaType? @default(IMAGE)
   tags        Tag[]
   memoryDate  DateTime?
