@@ -13,7 +13,7 @@ import type { ApiMemory } from "../components/NewMemoryModal";
 import MemoryMedia from "../components/MemoryMedia";
 import MemoryViewerModal from "../components/MemoryViewerModal";
 import {
-  MOOD_OPTIONS,
+  //MOOD_OPTIONS,
   formatMoodLabel,
   getMemoryTagNames,
 } from "../utils/memoryMetadata";
@@ -77,9 +77,9 @@ const staggerContainer: Variants = {
   },
 };
 
-function inputClasses() {
+/*function inputClasses() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-500/15";
-}
+}*/
 
 function getStoredToken() {
   return localStorage.getItem("i-nelory.auth.token");
