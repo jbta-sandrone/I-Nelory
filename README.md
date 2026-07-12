@@ -187,62 +187,20 @@ Fully customizable in-app notification preferences.
 
 ---
 
-# 📷 Screenshots
-
-> *(Add screenshots here after deployment.)*
-
-### Landing Page
-
-![Landing](./screenshots/landing.png)
-
-### Dashboard
-
-![Dashboard](./screenshots/dashboard.png)
-
-### AI Search
-
-![AI Search](./screenshots/ai-search.png)
-
-### Memory Viewer
-
-![Memory Viewer](./screenshots/memory-viewer.png)
-
-### Albums
-
-![Albums](./screenshots/albums.png)
-
----
-
 # 🎮 Demo Account
 
 ## User Account
 
-Email
+Username
 
 ```
-demo@inelory.com
-```
-
-Password
-
-```
-Demo123!
-```
-
----
-
-## Admin Account *(if applicable)*
-
-Email
-
-```
-admin@inelory.com
+UserDemo123
 ```
 
 Password
 
 ```
-Admin123!
+@UserDemo123
 ```
 
 ---
@@ -278,7 +236,7 @@ I-Nelory
 ## Clone
 
 ```bash
-git clone https://github.com/yourusername/I-Nelory.git
+git clone https://github.com/jbta-sandrone/I-Nelory.git
 ```
 
 ## Install
@@ -345,16 +303,16 @@ Instead of focusing on likes and followers, I-Nelory emphasizes personal storyte
 
 # 📝 License
 
-This project is for educational and portfolio purposes.
+For project experience and portfolio purposes.
 
 ---
 
 # 👨‍💻 Developer
 
-Developed by **Your Name**
+Developed by **Jonel T. Ablog**
 
 GitHub:
-https://github.com/yourusername
+github.com/jbta-sandrone
 
 LinkedIn:
-https://linkedin.com/in/yourusername
+linkedin.com/in/jbtablog
