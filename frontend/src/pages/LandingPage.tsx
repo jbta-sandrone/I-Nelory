@@ -59,10 +59,10 @@ import { useAppearance } from "../context/AppearanceContext";
       "Collect trips, family stories, milestones, and everyday scenes into thoughtful personal spaces.",
   },
   {
-    title: "Story Archive",
-    icon: "archive",
+    title: "AI Memory Search",
+    icon: "bot",
     description:
-      "Pair media with written reflections so every memory keeps its context, not just its timestamp.",
+      "Search your memories with the help of AI. Find the moments you want without scrolling through everything.",
   },
   {
     title: "Favorites",
@@ -72,23 +72,36 @@ import { useAppearance } from "../context/AppearanceContext";
   },
 ];
 
-  const memoryCards = [
+  type LandingMemoryCard = {
+    title: string;
+    date: string;
+    mediaType: "image" | "video";
+    mediaUrl: string;
+    fallbackImageUrl?: string;
+  };
+
+  const memoryCards: LandingMemoryCard[] = [
     {
       title: "Coastal Weekend",
       date: "June 2026",
-      image:
+      mediaType: "image",
+      mediaUrl:
         "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
     },
     {
-      title: "Family Morning",
+      title: "Rainy Morning",
       date: "April 2026",
-      image:
+      mediaType: "video",
+      mediaUrl:
+        "https://res.cloudinary.com/vxvnijbs/video/upload/v1783952163/morning_rain_igxwkt.mp4",
+      fallbackImageUrl:
         "https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=900&q=80",
     },
     {
       title: "Quiet Notes",
       date: "March 2026",
-      image:
+      mediaType: "image",
+      mediaUrl:
         "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=900&q=80",
     },
   ];
@@ -103,25 +116,31 @@ import { useAppearance } from "../context/AppearanceContext";
 
   const aiExamples = [
     "Show me every beach trip.",
-    "Find memories with my family.",
-    "Show birthday celebrations.",
+    "Find memories about nature.",
+    "Show a cozy memories.",
+    "Find my rainy-day memories.",
+    "Show memories from graduation.",
+    "Find videos from my travels.",
   ];
 
 const timelineItems = [
     {
-      year: "2026",
-      title: "A summer album begins",
-      detail: "38 photos, 4 videos, and a journal entry saved together.",
+      date: "June 18, 2026",
+      title: "Graduation Day",
+      detail:
+        "A milestone filled with proud smiles, photographs, and the beginning of a new chapter.",
     },
     {
-      year: "2025",
-      title: "Family traditions collected",
-      detail: "Recurring moments become a private story of people and places.",
+      date: "April 5, 2025",
+      title: "Weekend by the Coast",
+      detail:
+        "A quiet afternoon of sea breeze, long walks, and a sunset worth remembering.",
     },
     {
-      year: "2024",
-      title: "First archive imported",
-      detail: "Old images and notes find a cleaner long-term home.",
+      date: "December 24, 2024",
+      title: "Christmas at Home",
+      detail:
+        "Family traditions, shared meals, and the familiar warmth of celebrating together.",
     },
 ];
 
@@ -142,6 +161,56 @@ const loadingMemoryElements = [
   { icon: "◉", x: "112%", y: "28%", rotate: -8, duration: 4.4, delay: 0.1 },
   { icon: "□", x: "-12%", y: "-110%", rotate: 4, duration: 4, delay: 0.3 },
 ];
+
+type LandingMemoryMediaProps = {
+  card: LandingMemoryCard;
+  className: string;
+  reducedMotion: boolean | null;
+};
+
+function LandingMemoryMedia({
+  card,
+  className,
+  reducedMotion,
+}: LandingMemoryMediaProps) {
+  const [videoFailed, setVideoFailed] = useState(false);
+  const showFallback =
+    card.mediaType === "video" && (reducedMotion || videoFailed);
+  const fallbackImageUrl = card.fallbackImageUrl ?? card.mediaUrl;
+
+  if (card.mediaType === "image" || showFallback) {
+    return <img src={fallbackImageUrl} alt="" className={className} />;
+  }
+
+  return (
+    <div className={`relative overflow-hidden ${className}`}>
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        poster={fallbackImageUrl}
+        onError={() => setVideoFailed(true)}
+        className="h-full w-full rounded-[inherit] object-cover"
+        aria-label={`${card.title} rainy-weather video`}
+      >
+        <source src={card.mediaUrl} type="video/mp4" />
+      </video>
+      <span className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-slate-950/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm backdrop-blur-sm">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-2.5 w-2.5"
+        >
+          <path d="M5.6 3.8a1 1 0 0 1 1.5-.86l9.1 6.2a1 1 0 0 1 0 1.72l-9.1 6.2a1 1 0 0 1-1.5-.86V3.8Z" />
+        </svg>
+        Video
+      </span>
+    </div>
+  );
+}
 
   type ScrollBackgroundImageProps = {
     image: string;
@@ -264,6 +333,53 @@ function FeatureIcon({ name }: { name: string }) {
       </svg>
     );
   }
+
+  if (name === "bot" || name === "robot") {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+      <path
+        d="M12 3v2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <rect
+        x="6"
+        y="7"
+        width="12"
+        height="10"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <circle cx="10" cy="12" r="1" fill="currentColor" />
+      <circle cx="14" cy="12" r="1" fill="currentColor" />
+      <path
+        d="M10 15h4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M3 11h3M18 11h3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 17v3M16 17v3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
   return (
     <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
@@ -483,6 +599,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
     const [showSignup, setShowSignup] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [activeAiPromptIndex, setActiveAiPromptIndex] = useState(0);
     const lenisRef = useRef<Lenis | null>(null);
     const navigate = useNavigate();
     const prefersReducedMotion = useReducedMotion();
@@ -490,6 +607,21 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
     const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -70]);
     const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.96]);
     const albumY = useTransform(scrollYProgress, [0, 0.5], [0, -90]);
+
+    useEffect(() => {
+      if (prefersReducedMotion) {
+        setActiveAiPromptIndex(0);
+        return;
+      }
+
+      const promptInterval = window.setInterval(() => {
+        setActiveAiPromptIndex((currentIndex) =>
+          (currentIndex + 1) % aiExamples.length,
+        );
+      }, 3000);
+
+      return () => window.clearInterval(promptInterval);
+    }, [prefersReducedMotion]);
 
     useEffect(() => {
       if (prefersReducedMotion) {
@@ -634,12 +766,12 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
             className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8"
           >
             <a
-              href="#"
+              href="#topmost"
               className="flex shrink-0 items-center gap-3 text-xl font-semibold tracking-tight"
             >
               <img
                 src={iNeloryLogo}
-                alt=""
+                alt="I-Nelory logo"
                 className="h-10 w-10 rounded-xl object-contain"
                 aria-hidden="true"
               />
@@ -810,6 +942,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
           >
             <motion.span
               variants={fadeUp}
+              id="topmost"
               className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
             >
               Your Personal Digital Memory.
@@ -817,18 +950,16 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
 
             <motion.h1
               variants={fadeUp}
-              className="mt-8 text-5xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-6xl lg:text-7xl"
+              className="mt-8 text-5xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-6xl lg:text-6xl"
             >
-              Preserve your life&apos;s moments beautifully.
+              Every memory deserves a place to be remembered.
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
               className="mt-6 max-w-2xl text-lg leading-8 text-black-/80 sm:text-xl sm:leading-9"
             >
-              I-Nelory is a private digital memory platform for saving photos,
-              videos, stories, albums, and meaningful moments — enhanced with
-              intelligent memory search.
+              Save your photos, videos, stories, and special moments in one private place. Organize them beautifully, rediscover them anytime, and let AI help you find memories naturally.
             </motion.p>
 
             <motion.div
@@ -867,9 +998,9 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
               transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
               whileHover={{ y: -10, scale: 1.03 }}
             >
-              <img
-                src={memoryCards[0].image}
-                alt=""
+              <LandingMemoryMedia
+                card={memoryCards[0]}
+                reducedMotion={prefersReducedMotion}
                 className="h-full w-full rounded-[1.35rem] object-cover"
               />
             </motion.div>
@@ -880,9 +1011,9 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
               transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
               whileHover={{ y: -10, scale: 1.03 }}
             >
-              <img
-                src={memoryCards[1].image}
-                alt=""
+              <LandingMemoryMedia
+                card={memoryCards[1]}
+                reducedMotion={prefersReducedMotion}
                 className="h-full w-full rounded-[1.35rem] object-cover"
               />
             </motion.div>
@@ -910,9 +1041,9 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
               <div className="mt-5 grid grid-cols-3 gap-3">
                 {memoryCards.map((card) => (
                   <div key={card.title}>
-                    <img
-                      src={card.image}
-                      alt=""
+                    <LandingMemoryMedia
+                      card={card}
+                      reducedMotion={prefersReducedMotion}
                       className="h-24 w-full rounded-2xl object-cover"
                     />
                     <p className="mt-2 truncate text-xs font-medium text-slate-700">
@@ -965,9 +1096,9 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                   transition={{ duration: 0.35 }}
                   className="overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/80 p-3 shadow-xl shadow-slate-950/8 backdrop-blur-sm hover:shadow-2xl hover:bg-white/60"
                 >
-                  <img
-                    src={card.image}
-                    alt=""
+                  <LandingMemoryMedia
+                    card={card}
+                    reducedMotion={prefersReducedMotion}
                     className={`h-56 w-full rounded-[1.25rem] object-cover ${
                       index === 1 ? "sm:mt-8" : ""
                     }`}
@@ -1066,13 +1197,32 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
             >
               <div className="rounded-[1.5rem] bg-white/95 p-4 text-slate-950">
                 <p className="text-sm font-semibold">Search your memories</p>
-                <div className="mt-4 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-500">
-                  Show me every beach trip.
+                <div className="mt-4 grid min-h-[4.25rem] items-center overflow-hidden rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-500 sm:min-h-[2.875rem]">
+                  <AnimatePresence initial={false} mode="wait">
+                    <motion.p
+                      key={activeAiPromptIndex}
+                      className="col-start-1 row-start-1"
+                      initial={
+                        prefersReducedMotion
+                          ? { opacity: 1 }
+                          : { opacity: 0, y: 8, filter: "blur(2px)" }
+                      }
+                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                      exit={
+                        prefersReducedMotion
+                          ? { opacity: 1 }
+                          : { opacity: 0, y: -8, filter: "blur(2px)" }
+                      }
+                      transition={{ duration: 0.32, ease: easeOut }}
+                    >
+                      {aiExamples[activeAiPromptIndex]}
+                    </motion.p>
+                  </AnimatePresence>
                 </div>
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                {aiExamples.map((example, index) => (
+                {aiExamples.slice(0, 3).map((example, index) => (
                   <motion.div
                     key={example}
                     variants={fadeUp}
@@ -1080,9 +1230,9 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                     className="rounded-2xl border border-white/10 bg-white/[0.07] p-3 hover:bg-white/15"
                   >
                     <div className="h-24 overflow-hidden rounded-xl">
-                      <img
-                        src={memoryCards[index].image}
-                        alt=""
+                      <LandingMemoryMedia
+                        card={memoryCards[index]}
+                        reducedMotion={prefersReducedMotion}
                         className="h-full w-full object-cover opacity-85"
                       />
                     </div>
@@ -1130,11 +1280,11 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
                   transition={{ duration: 0.35 }}
                   className="rounded-[1.5rem] border border-slate-200 bg-white/80 p-6 shadow-sm shadow-slate-950/5 backdrop-blur-sm hover:bg-white/60"
                 >
-                  <div className="flex gap-5">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-semibold text-emerald-700">
-                      {item.year}
+                  <div className="flex min-w-0 flex-col items-start gap-4 sm:flex-row sm:gap-5">
+                    <div className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 sm:min-w-[9.5rem] sm:rounded-2xl sm:px-4 sm:text-sm">
+                      {item.date}
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-lg font-semibold text-slate-950">
                         {item.title}
                       </h3>
@@ -1160,7 +1310,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
         >
           <div className="mx-auto max-w-5xl rounded-[2rem] border border-slate-200 bg-slate-50/70 px-6 py-16 text-center shadow-2xl shadow-slate-950/8 backdrop-blur-sm sm:px-12">
             <h2 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
-              Start preserving the moments that matter.
+              Start building your digital memory journal today.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
               Build a private memory space that feels calm, beautiful, and made
@@ -1178,7 +1328,7 @@ export default function LandingPage({ onLoginSuccess }: LandingPageProps) {
         {/* Footer */}
         <footer className="relative z-10 border-t border-slate-100 bg-white/70 px-6 py-10 backdrop-blur-sm">
           <div className="mx-auto max-w-7xl text-sm text-black-500">
-            © 2026 I-Nelory. Your Personal Digital Memory.
+            © 2026 I-Nelory. Your Personal Digital Memory. All rights reserved.
           </div>
         </footer>
 
