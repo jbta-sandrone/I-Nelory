@@ -19,7 +19,14 @@
   }
 
   export function getServerDayStart(date = new Date()) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const philippinesDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  
+    return new Date(`${philippinesDate}T00:00:00.000Z`);
   }
 
   function toQuota(count: number) {
