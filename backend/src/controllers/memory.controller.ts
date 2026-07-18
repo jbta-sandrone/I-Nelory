@@ -21,7 +21,7 @@ import { StorageQuotaError } from "../services/storage.service.js";
 import {
   AiSearchLimitError,
   assertAiSearchQuotaAvailable,
-  getAiSearchQuota,
+  getAiSearchQuotaSnapshot,
   incrementAiSearchUsage,
 } from "../services/ai-search-quota.service.js";
 
@@ -299,11 +299,20 @@ export const getAiSearchQuotaStatus = async (
   res: Response,
 ) => {
   try {
-    const quota = await getAiSearchQuota(req.userId!);
+    const userId = req.userId!;
+    const { usageDate, quotaRow, quotaReturned } =
+      await getAiSearchQuotaSnapshot(userId);
+
+    console.log({
+      userId,
+      usageDate,
+      quotaRow,
+      quotaReturned,
+    });
 
     return res.json({
       success: true,
-      ...quota,
+      ...quotaReturned,
     });
   } catch (error) {
     console.error("AI Search quota error:", error);
