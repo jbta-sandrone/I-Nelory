@@ -11,6 +11,7 @@ import {
   type AISearchResult,
 } from "../context/AISearchContext";
 import { API_BASE_URL } from "../config/api";
+import { getStoredAuthToken } from "../services/auth";
 
 type MemoryType = "Photo" | "Video" | "Story";
 
@@ -19,6 +20,31 @@ type MemoriesResponse = {
   message?: string;
   answer?: string;
   summary?: string;
+};
+
+type AISearchResponse = MemoriesResponse & {
+  success?: boolean;
+  remaining?: number;
+  data?: {
+    memories?: ApiMemory[];
+    message?: string;
+    answer?: string;
+    summary?: string;
+  };
+};
+
+type AISearchQuotaResponse = {
+  success: boolean;
+  limit: number;
+  used: number;
+  remaining: number;
+  message?: string;
+};
+
+type AISearchRequestResult = {
+  results: AISearchResult[];
+  responseText: string;
+  remaining?: number;
 };
 
 const easeOut: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -71,8 +97,50 @@ const howItWorks = [
   },
 ];
 
-function getStoredToken() {
-  return localStorage.getItem("i-nelory.auth.token");
+const AI_SEARCH_DAILY_LIMIT = 3;
+const AI_SEARCH_LIMIT_MESSAGE =
+  "You have reached your daily AI Search limit of 3 searches. Please try again tomorrow.";
+
+function getApiMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object" && "message" in payload) {
+    const message = (payload as { message?: unknown }).message;
+
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
+function getRequiredAuthToken() {
+  const token = getStoredAuthToken();
+
+  if (!token) {
+    throw new Error("Missing authentication token. Please log in again.");
+  }
+
+  return token;
+}
+
+async function getAiSearchQuota() {
+  const token = getRequiredAuthToken();
+
+  const response = await fetch(`${API_BASE_URL}/api/ai/search/quota`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = (await response.json().catch(() => null)) as
+    | AISearchQuotaResponse
+    | null;
+
+  if (!response.ok || !data?.success) {
+    throw new Error(getApiMessage(data, "Unable to load AI Search quota."));
+  }
+
+  return data;
 }
 
 function getMemoryType(mediaType?: string | null): MemoryType {
@@ -145,7 +213,7 @@ function mapApiMemory(memory: ApiMemory): AISearchResult {
 async function aiSearchMemories(
   query: string,
   token: string
-): Promise<{ results: AISearchResult[]; responseText: string }> {
+): Promise<AISearchRequestResult> {
   if (!query.trim()) {
     return { results: [], responseText: "" };
   }
@@ -160,18 +228,35 @@ async function aiSearchMemories(
       body: JSON.stringify({ query: query.trim() }),
     });
 
+    const data = (await response.json().catch(() => null)) as
+      | AISearchResponse
+      | null;
+
     if (!response.ok) {
-      throw new Error(`Failed to search memories (${response.status}).`);
+      const error = new Error(
+        getApiMessage(data, `Failed to search memories (${response.status}).`),
+      );
+      (error as Error & { remaining?: number }).remaining = data?.remaining;
+      throw error;
     }
 
-    const data = (await response.json()) as MemoriesResponse;
+    const memories = data?.data?.memories ?? data?.memories ?? [];
+    const responseText =
+      data?.data?.answer ??
+      data?.data?.summary ??
+      data?.data?.message ??
+      data?.answer ??
+      data?.summary ??
+      data?.message ??
+      "";
 
     // Map API memories to SearchResult format
     return {
-      results: data.memories
+      results: memories
         .filter((memory) => !memory.isArchived)
         .map(mapApiMemory),
-      responseText: data.answer ?? data.summary ?? data.message ?? "",
+      responseText,
+      remaining: data?.remaining,
     };
   } catch (error) {
     console.error("AI Search error:", error);
@@ -205,6 +290,60 @@ export default function AISearchPage() {
   const [isLoading, setIsLoading] = useState(() => !hasSearched);
   const [errorMessage, setErrorMessage] = useState("");
   const [memoryToView, setMemoryToView] = useState<AISearchResult | null>(null);
+  const [remainingSearches, setRemainingSearches] = useState<number | null>(
+    null,
+  );
+  const [searchLimit, setSearchLimit] = useState(AI_SEARCH_DAILY_LIMIT);
+  const [quotaMessage, setQuotaMessage] = useState("");
+  const isSearchLimitReached =
+    remainingSearches !== null && remainingSearches <= 0;
+  const displayedRemaining = remainingSearches ?? searchLimit;
+
+  useEffect(() => {
+    if (
+      privacyPreferencesLoading ||
+      privacyPreferencesLoadError ||
+      !privacyPreferences.allowAiSearch
+    ) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function fetchQuota() {
+      try {
+        const quota = await getAiSearchQuota();
+
+        if (!isActive) {
+          return;
+        }
+
+        setSearchLimit(quota.limit);
+        setRemainingSearches(quota.remaining);
+        setQuotaMessage(quota.remaining <= 0 ? AI_SEARCH_LIMIT_MESSAGE : "");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setQuotaMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load AI Search quota.",
+        );
+      }
+    }
+
+    void fetchQuota();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    privacyPreferences.allowAiSearch,
+    privacyPreferencesLoadError,
+    privacyPreferencesLoading,
+  ]);
 
   // Fetch memories on mount
   useEffect(() => {
@@ -222,11 +361,7 @@ export default function AISearchPage() {
       setErrorMessage("");
 
       try {
-        const token = getStoredToken();
-
-        if (!token) {
-          throw new Error("Missing authentication token. Please log in again.");
-        }
+        const token = getRequiredAuthToken();
 
         const response = await fetch(`${API_BASE_URL}/api/memories`, {
           method: "GET",
@@ -278,8 +413,14 @@ export default function AISearchPage() {
       privacyPreferencesLoading ||
       privacyPreferencesLoadError ||
       !privacyPreferences.allowAiSearch ||
+      isSearchLimitReached ||
       !query.trim()
     ) {
+      if (isSearchLimitReached) {
+        setQuotaMessage(
+          "You have reached your daily AI Search limit. Your searches will reset tomorrow.",
+        );
+      }
       return;
     }
 
@@ -292,21 +433,36 @@ export default function AISearchPage() {
     setSubmittedQuery(query.trim());
 
     try {
-      const token = getStoredToken();
-
-      if (!token) {
-        throw new Error("Missing authentication token. Please log in again.");
-      }
+      const token = getRequiredAuthToken();
 
       const response = await aiSearchMemories(query, token);
       setFilteredResults(response.results);
       setResponseText(response.responseText);
+      if (typeof response.remaining === "number") {
+        setRemainingSearches(response.remaining);
+        setQuotaMessage(
+          response.remaining <= 0
+            ? "You have reached your daily AI Search limit. Your searches will reset tomorrow."
+            : "",
+        );
+      }
     } catch (error) {
+      const remaining = (error as Error & { remaining?: number }).remaining;
+
+      if (typeof remaining === "number") {
+        setRemainingSearches(remaining);
+      }
+
       setFilteredResults([]);
       setResponseText("");
       setSearchError(
         error instanceof Error ? error.message : "Search failed. Please try again.",
       );
+      if (remaining === 0) {
+        setQuotaMessage(
+          "You have reached your daily AI Search limit. Your searches will reset tomorrow.",
+        );
+      }
     } finally {
       finishSearch();
     }
@@ -319,7 +475,7 @@ export default function AISearchPage() {
 
   // Handle Enter key in search input
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !isSearching) {
+    if (e.key === "Enter" && !isSearching && !isSearchLimitReached) {
       e.preventDefault();
       handleSearch();
     }
@@ -433,6 +589,16 @@ export default function AISearchPage() {
           </div>
 
           <div className="rounded-[1.75rem] border border-white/10 bg-white p-4 shadow-2xl shadow-black/20">
+            <div className="mb-3 flex flex-col gap-1 rounded-2xl bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold text-emerald-700">
+                AI Searches Remaining: {displayedRemaining} / {searchLimit}
+              </p>
+              {isSearchLimitReached ? (
+                <p className="text-xs font-medium text-slate-500">
+                  Your daily limit will reset tomorrow.
+                </p>
+              ) : null}
+            </div>
             <label className="sr-only" htmlFor="ai-memory-search">
               Search memories
             </label>
@@ -449,12 +615,18 @@ export default function AISearchPage() {
               <button
                 type="button"
                 onClick={handleSearch}
-                disabled={isSearching}
+                disabled={isSearching || isSearchLimitReached || !searchText.trim()}
                 className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/25 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSearching ? "Searching..." : "Search Memories"}
               </button>
             </div>
+
+            {quotaMessage ? (
+              <p className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                {quotaMessage}
+              </p>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
               {examplePrompts.map((prompt) => (
@@ -466,7 +638,7 @@ export default function AISearchPage() {
                     void runAiSearch(prompt);
                   }}
                   className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed"
-                  disabled={isSearching}
+                  disabled={isSearching || isSearchLimitReached}
                 >
                   {prompt}
                 </button>
@@ -737,7 +909,7 @@ export default function AISearchPage() {
                     void runAiSearch(prompt);
                   }}
                   className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed"
-                  disabled={isSearching}
+                  disabled={isSearching || isSearchLimitReached}
                 >
                   {prompt}
                 </button>

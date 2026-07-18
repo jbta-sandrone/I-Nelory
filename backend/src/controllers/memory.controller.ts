@@ -18,6 +18,12 @@ import {
 import { notifyUser } from "../services/notification.service.js";
 import { getPrivacyPreferences } from "../services/privacy-preference.service.js";
 import { StorageQuotaError } from "../services/storage.service.js";
+import {
+  AiSearchLimitError,
+  assertAiSearchQuotaAvailable,
+  getAiSearchQuota,
+  incrementAiSearchUsage,
+} from "../services/ai-search-quota.service.js";
 
 function sendMemoryMutationError(
   res: Response,
@@ -221,10 +227,12 @@ export const toggleArchive = async (req: AuthRequest, res: Response) => {
 };
 export const aiSearch = async (req: AuthRequest, res: Response) => {
   try {
-    const { allowAiSearch } = await getPrivacyPreferences(req.userId!);
+    const userId = req.userId!;
+    const { allowAiSearch } = await getPrivacyPreferences(userId);
 
     if (!allowAiSearch) {
       return res.status(403).json({
+        success: false,
         message: "AI Search is disabled in your Privacy Settings.",
       });
     }
@@ -233,22 +241,26 @@ export const aiSearch = async (req: AuthRequest, res: Response) => {
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
       return res.status(400).json({
+        success: false,
         message: "Search query is required",
       });
     }
 
-    const memories = await searchMemoriesByQuery(req.userId!, query.trim());
+    await assertAiSearchQuotaAvailable(userId);
+
+    const memories = await searchMemoriesByQuery(userId, query.trim());
+    const quota = await incrementAiSearchUsage(userId);
 
     try {
       await notifyUser({
-        userId: req.userId!,
+        userId,
         title: "AI search complete",
         message: `Found ${memories.length} memories for your search.`,
         category: "AI",
         type: "INFO",
         icon: "✨",
         actionType: "ai-search",
-        groupKey: `ai-search:${req.userId!}`,
+        groupKey: `ai-search:${userId}`,
         canGroup: true,
       });
     } catch (notificationError) {
@@ -256,13 +268,48 @@ export const aiSearch = async (req: AuthRequest, res: Response) => {
     }
 
     return res.json({
+      success: true,
+      remaining: quota.remaining,
+      data: {
+        message: "AI search completed successfully ðŸ’š",
+        memories,
+      },
       message: "AI search completed successfully 💚",
       memories,
     });
   } catch (error) {
+    if (error instanceof AiSearchLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+        remaining: error.remaining,
+      });
+    }
+
     console.error("AI Search error:", error);
     return res.status(500).json({
+      success: false,
       message: error instanceof Error ? error.message : "AI search failed",
+    });
+  }
+};
+
+export const getAiSearchQuotaStatus = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  try {
+    const quota = await getAiSearchQuota(req.userId!);
+
+    return res.json({
+      success: true,
+      ...quota,
+    });
+  } catch (error) {
+    console.error("AI Search quota error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load AI Search quota.",
     });
   }
 };
